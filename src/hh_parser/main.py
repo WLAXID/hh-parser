@@ -122,6 +122,9 @@ class HHParserTool:
 
     def __init__(self):
         self._parser = self._create_parser()
+        # Значения по умолчанию для атрибутов, устанавливаемых через _assign_args
+        self.config_dir: Path | None = None
+        self.profile_id: str | None = None
 
     @staticmethod
     def _proxy_url_to_dict(proxy_url: str | None) -> dict[str, str]:
@@ -171,12 +174,18 @@ class HHParserTool:
 
     @cached_property
     def config_path(self) -> Path:
-        # По умолчанию используем директорию data/ внутри проекта
-        default_config_dir = Path(__file__).resolve().parent.parent.parent / "data"
-        return (
-            (self.config_dir or Path(getenv("CONFIG_DIR", "")) or default_config_dir)
-            / (self.profile_id or getenv("HH_PROFILE_ID", "default"))
-        ).resolve()
+        # Определяем базовую директорию конфигурации
+        # Приоритет: --config-dir, CONFIG_DIR, cwd/data
+        if self.config_dir:
+            base_dir = self.config_dir
+        else:
+            config_dir_env = getenv("CONFIG_DIR", "")
+            base_dir = Path(config_dir_env) if config_dir_env else Path.cwd() / "data"
+
+        # Определяем имя профиля
+        profile = self.profile_id or getenv("HH_PROFILE_ID", "default")
+
+        return (base_dir / profile).resolve()
 
     @cached_property
     def config(self) -> dict:
