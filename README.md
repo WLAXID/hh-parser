@@ -473,51 +473,51 @@ hh-parser/
 
 ```
 hh-parser/
-├── data/                     # Данные приложения (по умолчанию)
-│   └── default/              # Профиль по умолчанию
-│       ├── config.json       # Конфигурация и токены
-│       ├── cookies.txt       # Cookies сессии
-│       └── hh_parser.db      # База данных SQLite
+├── data/                       # Данные приложения (по умолчанию)
+│   └── default/                # Профиль по умолчанию
+│       ├── config.json         # Конфигурация и токены
+│       ├── cookies.txt         # Cookies сессии
+│       └── hh_parser.db        # База данных SQLite
 ├── src/hh_parser/
-│   ├── __main__.py           # Точка входа для python -m hh_parser
-│ ├── main.py                 # Основной CLI и класс HHParserTool
-│ ├── api/                    # Клиент для работы с API hh.ru
-│ │ ├── client.py             # API клиент
-│ │ ├── client_keys.py        # Ключи клиента
-│ │ ├── datatypes.py          # Типы данных API
-│ │ ├── errors.py             # Ошибки API
-│ │ └── user_agent.py         # User-Agent
-│ ├── contacts/               # Модуль парсинга контактов
-│ │ ├── __init__.py           # Экспорт модуля
-│ │ ├── extractors.py         # Regex-экстракторы email и телефонов
-│ │ ├── deduplication.py      # Дедупликация контактов
-│ │ ├── api_extractor.py      # Извлечение из hh.ru API
-│ │ └── site_parser.py        # Парсинг сайта работодателя
-│ ├── storage/                # Слой доступа к данным (SQLite)
-│ │ ├── facade.py             # Фасад для работы с хранилищем
-│ │ ├── models/               # Модели данных
-│ │ │ ├── employer.py         # Модель работодателя
-│ │ │ ├── vacancy.py          # Модель вакансии
-│ │ │ └── contact.py          # Модель контакта
-│ │ ├── queries/              # SQL запросы
-│ │ │ ├── schema.sql          # Схема БД
-│ │ │ └── schema_contacts.sql # Схема таблицы контактов
-│ │ └── repositories/         # Репозитории
-│ │       ├── employers.py    # Репозиторий работодателей
-│ │       ├── vacancies.py    # Репозиторий вакансий
-│ │       └── contacts.py     # Репозиторий контактов
-│ ├── operations/             # Операции CLI
-│ │ ├── authorize.py          # Авторизация
-│ │ ├── export.py             # Экспорт данных
-│ │ ├── parse.py              # Парсинг работодателей
-│ │ ├── parse_contacts.py     # Парсинг контактов
-│ │ └── whoami.py             # Информация о пользователе
-│ └── utils/                  # Утилиты
-│     ├── cookiejar.py        # Работа с cookies
-│     ├── date.py             # Работа с датами
-│     ├── json.py             # JSON утилиты
-│     ├── log.py              # Логирование
-│     └── terminal.py         # Настройка терминала
+│   ├── __main__.py             # Точка входа для python -m hh_parser
+│   ├── main.py                 # Основной CLI и класс HHParserTool
+│   ├── api/                    # Клиент для работы с API hh.ru
+│   │ ├── client.py             # API клиент
+│   │ ├── client_keys.py        # Ключи клиента
+│   │ ├── datatypes.py          # Типы данных API
+│   │ ├── errors.py             # Ошибки API
+│   │ └── user_agent.py         # User-Agent
+│   ├── contacts/               # Модуль парсинга контактов
+│   │ ├── __init__.py           # Экспорт модуля
+│   │ ├── extractors.py         # Regex-экстракторы email и телефонов
+│   │ ├── deduplication.py      # Дедупликация контактов
+│   │ ├── api_extractor.py      # Извлечение из hh.ru API
+│   │ └── site_parser.py        # Парсинг сайта работодателя
+│   ├── storage/                # Слой доступа к данным (SQLite)
+│   │ ├── facade.py             # Фасад для работы с хранилищем
+│   │ ├── models/               # Модели данных
+│   │ │ ├── employer.py         # Модель работодателя
+│   │ │ ├── vacancy.py          # Модель вакансии
+│   │ │ └── contact.py          # Модель контакта
+│   │ ├── queries/              # SQL запросы
+│   │ │ ├── schema.sql          # Схема БД
+│   │ │ └── schema_contacts.sql # Схема таблицы контактов
+│   │ └── repositories/         # Репозитории
+│   │       ├── employers.py    # Репозиторий работодателей
+│   │       ├── vacancies.py    # Репозиторий вакансий
+│   │       └── contacts.py     # Репозиторий контактов
+│   ├── operations/             # Операции CLI
+│   │ ├── authorize.py          # Авторизация
+│   │ ├── export.py             # Экспорт данных
+│   │ ├── parse.py              # Парсинг работодателей
+│   │ ├── parse_contacts.py     # Парсинг контактов
+│   │ └── whoami.py             # Информация о пользователе
+│   └── utils/                  # Утилиты
+│       ├── cookiejar.py        # Работа с cookies
+│       ├── date.py             # Работа с датами
+│       ├── json.py             # JSON утилиты
+│       ├── log.py              # Логирование
+│       └── terminal.py         # Настройка терминала
 └── README.md
 ```
 

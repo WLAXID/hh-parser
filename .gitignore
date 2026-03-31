@@ -68,7 +68,6 @@ venv.bak/
 # Project-specific: data directory (keep .gitkeep)
 data/*
 !data/.gitkeep
-default/
 
 # Database
 *.db
@@ -78,6 +77,9 @@ default/
 
 # Cookies
 cookies.txt
+
+# Config
+config.json
 
 # Plans
 plans/
