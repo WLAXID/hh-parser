@@ -5,6 +5,7 @@ PRAGMA foreign_keys = ON;
 CREATE TABLE IF NOT EXISTS contacts (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     employer_id INTEGER NOT NULL,
+    employer_name TEXT NOT NULL,
     contact_type TEXT NOT NULL CHECK (contact_type IN ('email', 'phone')),
     value TEXT NOT NULL,
     source TEXT NOT NULL CHECK (source IN ('api', 'site')),
@@ -17,7 +18,8 @@ CREATE TABLE IF NOT EXISTS contacts (
 CREATE INDEX IF NOT EXISTS idx_contacts_employer ON contacts(employer_id);
 CREATE INDEX IF NOT EXISTS idx_contacts_type ON contacts(contact_type);
 CREATE INDEX IF NOT EXISTS idx_contacts_normalized ON contacts(normalized_value);
-CREATE UNIQUE INDEX IF NOT EXISTS idx_contacts_unique ON contacts(employer_id, contact_type, normalized_value);
+-- Уникальный индекс только по контактам (глобальная уникальность)
+CREATE UNIQUE INDEX IF NOT EXISTS idx_contacts_unique ON contacts(contact_type, normalized_value);
 /* ===================== ТРИГГЕРЫ ===================== */
 CREATE TRIGGER IF NOT EXISTS trg_contacts_updated
 AFTER

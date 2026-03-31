@@ -30,40 +30,39 @@ class ContactsRepository(BaseRepository):
         """Найти контакты работодателя определённого типа."""
         return self.find(employer_id=employer_id, contact_type=contact_type)
 
-    def exists(
-        self, employer_id: int, contact_type: str, normalized_value: str
-    ) -> bool:
-        """Проверить существование контакта."""
+    def exists(self, contact_type: str, normalized_value: str) -> bool:
+        """Проверить существование контакта (глобально по всем работодателям)."""
         cursor = self.conn.execute(
             """
-            SELECT 1 FROM contacts 
-            WHERE employer_id = ? AND contact_type = ? AND normalized_value = ?
+            SELECT 1 FROM contacts
+            WHERE contact_type = ? AND normalized_value = ?
             LIMIT 1
             """,
-            (employer_id, contact_type, normalized_value),
+            (contact_type, normalized_value),
         )
         return cursor.fetchone() is not None
 
     def save(self, contact: ContactModel) -> ContactModel:
         """Сохранить контакт (вставка или обновление)."""
-        # Проверяем существование по уникальному ключу
-        if self.exists(
-            contact.employer_id, contact.contact_type, contact.normalized_value
-        ):
+        # Проверяем существование по уникальному ключу (глобально)
+        if self.exists(contact.contact_type, contact.normalized_value):
             # Обновление существующего контакта
             self.conn.execute(
                 """
                 UPDATE contacts SET
+                    employer_id = ?,
+                    employer_name = ?,
                     value = ?,
                     source = ?,
                     source_url = ?
-                WHERE employer_id = ? AND contact_type = ? AND normalized_value = ?
+                WHERE contact_type = ? AND normalized_value = ?
                 """,
                 (
+                    contact.employer_id,
+                    contact.employer_name,
                     contact.value,
                     contact.source,
                     contact.source_url,
-                    contact.employer_id,
                     contact.contact_type,
                     contact.normalized_value,
                 ),
@@ -72,11 +71,12 @@ class ContactsRepository(BaseRepository):
             # Вставка нового контакта
             cursor = self.conn.execute(
                 """
-                INSERT INTO contacts (employer_id, contact_type, value, source, source_url, normalized_value)
-                VALUES (?, ?, ?, ?, ?, ?)
+                INSERT INTO contacts (employer_id, employer_name, contact_type, value, source, source_url, normalized_value)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     contact.employer_id,
+                    contact.employer_name,
                     contact.contact_type,
                     contact.value,
                     contact.source,

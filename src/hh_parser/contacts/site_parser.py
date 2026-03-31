@@ -232,12 +232,15 @@ class SiteContactParser:
             finally:
                 self._playwright = None
 
-    def parse_site(self, employer_id: int, site_url: str) -> Iterator[ContactModel]:
+    def parse_site(
+        self, employer_id: int, employer_name: str, site_url: str
+    ) -> Iterator[ContactModel]:
         """
         Парсить сайт работодателя на наличие контактов.
 
         Args:
             employer_id: ID работодателя
+            employer_name: Название работодателя
             site_url: URL сайта работодателя
 
         Yields:
@@ -264,7 +267,10 @@ class SiteContactParser:
                 # Извлекаем контакты с главной страницы
                 contacts_from_main = list(
                     self._extract_contacts_from_page(
-                        employer_id=employer_id, content=main_page_content, url=site_url
+                        employer_id=employer_id,
+                        employer_name=employer_name,
+                        content=main_page_content,
+                        url=site_url,
                     )
                 )
                 logger.debug(
@@ -275,6 +281,7 @@ class SiteContactParser:
                 # Ищем страницы контактов
                 yield from self._find_contact_pages(
                     employer_id=employer_id,
+                    employer_name=employer_name,
                     base_url=site_url,
                     main_content=main_page_content,
                 )
@@ -416,13 +423,14 @@ class SiteContactParser:
             return None
 
     def _extract_contacts_from_page(
-        self, employer_id: int, content: str, url: str
+        self, employer_id: int, employer_name: str, content: str, url: str
     ) -> Iterator[ContactModel]:
         """
         Извлечь контакты из содержимого страницы.
 
         Args:
             employer_id: ID работодателя
+            employer_name: Название работодателя
             content: HTML-содержимое страницы
             url: URL страницы
 
@@ -437,6 +445,7 @@ class SiteContactParser:
             emails_found.append(email)
             yield ContactModel(
                 employer_id=employer_id,
+                employer_name=employer_name,
                 contact_type="email",
                 value=email,
                 source="site",
@@ -450,6 +459,7 @@ class SiteContactParser:
             phones_found.append(phone)
             yield ContactModel(
                 employer_id=employer_id,
+                employer_name=employer_name,
                 contact_type="phone",
                 value=phone,
                 source="site",
@@ -462,13 +472,14 @@ class SiteContactParser:
         )
 
     def _find_contact_pages(
-        self, employer_id: int, base_url: str, main_content: str
+        self, employer_id: int, employer_name: str, base_url: str, main_content: str
     ) -> Iterator[ContactModel]:
         """
         Найти и парсить страницы контактов.
 
         Args:
             employer_id: ID работодателя
+            employer_name: Название работодателя
             base_url: Базовый URL сайта
             main_content: Содержимое главной страницы
 
@@ -517,7 +528,10 @@ class SiteContactParser:
                 )
                 contacts_from_page = list(
                     self._extract_contacts_from_page(
-                        employer_id=employer_id, content=content, url=contact_url
+                        employer_id=employer_id,
+                        employer_name=employer_name,
+                        content=content,
+                        url=contact_url,
                     )
                 )
                 logger.debug(

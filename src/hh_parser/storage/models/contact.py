@@ -11,6 +11,7 @@ class ContactModel(BaseModel):
 
     id: int | None = None
     employer_id: int = 0
+    employer_name: str = ""  # Название работодателя как на hh.ru
     contact_type: Literal["email", "phone"] = "email"
     value: str = ""
     source: Literal["api", "site"] = "api"

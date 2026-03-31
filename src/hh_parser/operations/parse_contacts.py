@@ -235,7 +235,9 @@ class Operation(BaseOperation):
         # Извлекаем из API
         if api_extractor and source in ("api", "both"):
             try:
-                for contact in api_extractor.extract_from_employer(employer.id):
+                for contact in api_extractor.extract_from_employer(
+                    employer.id, employer.name
+                ):
                     contacts.append(contact)
             except Exception as e:
                 logger.warning(f"Ошибка извлечения из API для {employer.id}: {e}")
@@ -243,7 +245,9 @@ class Operation(BaseOperation):
         # Парсим сайт
         if site_parser and source in ("site", "both") and employer.site_url:
             try:
-                for contact in site_parser.parse_site(employer.id, employer.site_url):
+                for contact in site_parser.parse_site(
+                    employer.id, employer.name, employer.site_url
+                ):
                     contacts.append(contact)
             except Exception as e:
                 logger.warning(f"Ошибка парсинга сайта для {employer.id}: {e}")

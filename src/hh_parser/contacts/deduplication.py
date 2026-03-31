@@ -16,7 +16,7 @@ def deduplicate_contacts(contacts: Iterable[ContactModel]) -> list[ContactModel]
     """
     Удалить дубликаты контактов.
 
-    Группирует контакты по (employer_id, contact_type, normalized_value)
+    Группирует контакты по (contact_type, normalized_value) - глобально,
     и выбирает лучшее представление для каждой группы.
 
     Args:
@@ -25,7 +25,7 @@ def deduplicate_contacts(contacts: Iterable[ContactModel]) -> list[ContactModel]
     Returns:
         Список уникальных контактов
     """
-    # Группируем по ключу (employer_id, contact_type, normalized_value)
+    # Группируем по ключу (contact_type, normalized_value) - глобальная уникальность
     groups: dict[tuple, list[ContactModel]] = defaultdict(list)
 
     for contact in contacts:
@@ -36,7 +36,7 @@ def deduplicate_contacts(contacts: Iterable[ContactModel]) -> list[ContactModel]
             else:
                 contact.normalized_value = normalize_phone(contact.value)
 
-        key = (contact.employer_id, contact.contact_type, contact.normalized_value)
+        key = (contact.contact_type, contact.normalized_value)
         groups[key].append(contact)
 
     # Выбираем лучшее представление для каждой группы
@@ -89,19 +89,21 @@ def merge_contacts(
         new: Новые контакты
 
     Returns:
-        Кортеж (контакты для добавления, контакты для обновления)
+    Кортеж (контакты для добавления, контакты для обновления)
     """
     existing_by_key: dict[tuple, ContactModel] = {}
 
     for contact in existing:
-        key = (contact.employer_id, contact.contact_type, contact.normalized_value)
+        # Глобальная уникальность по (contact_type, normalized_value)
+        key = (contact.contact_type, contact.normalized_value)
         existing_by_key[key] = contact
 
     to_add = []
     to_update = []
 
     for contact in new:
-        key = (contact.employer_id, contact.contact_type, contact.normalized_value)
+        # Глобальная уникальность по (contact_type, normalized_value)
+        key = (contact.contact_type, contact.normalized_value)
 
         if key in existing_by_key:
             # Контакт уже существует - проверяем, нужно ли обновление

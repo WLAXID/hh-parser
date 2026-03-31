@@ -30,7 +30,9 @@ class ApiContactExtractor:
         """
         self.api_client = api_client
 
-    def extract_from_employer(self, employer_id: int) -> Iterator[ContactModel]:
+    def extract_from_employer(
+        self, employer_id: int, employer_name: str = ""
+    ) -> Iterator[ContactModel]:
         """
         Извлечь контакты работодателя через API.
 
@@ -41,6 +43,7 @@ class ApiContactExtractor:
 
         Args:
             employer_id: ID работодателя
+            employer_name: Название работодателя
 
         Yields:
             Найденные контакты
@@ -48,7 +51,11 @@ class ApiContactExtractor:
         # 1. Получаем информацию о работодателе
         try:
             employer_info = self.api_client.request("GET", f"employers/{employer_id}")
-            yield from self._extract_from_employer_info(employer_id, employer_info)
+            # Получаем название работодателя из ответа API
+            actual_name = employer_info.get("name", employer_name)
+            yield from self._extract_from_employer_info(
+                employer_id, actual_name, employer_info
+            )
         except Exception as e:
             logger.warning(
                 f"Ошибка получения информации о работодателе {employer_id}: {e}"
@@ -56,18 +63,19 @@ class ApiContactExtractor:
 
         # 2. Получаем вакансии работодателя
         try:
-            yield from self._extract_from_vacancies(employer_id)
+            yield from self._extract_from_vacancies(employer_id, employer_name)
         except Exception as e:
             logger.warning(f"Ошибка получения вакансий работодателя {employer_id}: {e}")
 
     def _extract_from_employer_info(
-        self, employer_id: int, employer_info: dict
+        self, employer_id: int, employer_name: str, employer_info: dict
     ) -> Iterator[ContactModel]:
         """
         Извлечь контакты из информации о работодателе.
 
         Args:
             employer_id: ID работодателя
+            employer_name: Название работодателя
             employer_info: Данные о работодателе из API
 
         Yields:
@@ -78,7 +86,10 @@ class ApiContactExtractor:
         if description:
             source_url = employer_info.get("alternate_url", "")
             yield from self._extract_from_text(
-                employer_id=employer_id, text=description, source_url=source_url
+                employer_id=employer_id,
+                employer_name=employer_name,
+                text=description,
+                source_url=source_url,
             )
 
         # Извлекаем из branded_description если есть
@@ -86,15 +97,21 @@ class ApiContactExtractor:
         if branded_description:
             source_url = employer_info.get("alternate_url", "")
             yield from self._extract_from_text(
-                employer_id=employer_id, text=branded_description, source_url=source_url
+                employer_id=employer_id,
+                employer_name=employer_name,
+                text=branded_description,
+                source_url=source_url,
             )
 
-    def _extract_from_vacancies(self, employer_id: int) -> Iterator[ContactModel]:
+    def _extract_from_vacancies(
+        self, employer_id: int, employer_name: str
+    ) -> Iterator[ContactModel]:
         """
         Извлечь контакты из вакансий работодателя.
 
         Args:
             employer_id: ID работодателя
+            employer_name: Название работодателя
 
         Yields:
             Найденные контакты
@@ -129,6 +146,7 @@ class ApiContactExtractor:
                     if contacts:
                         yield from self._extract_from_vacancy_contacts(
                             employer_id=employer_id,
+                            employer_name=employer_name,
                             contacts=contacts,
                             source_url=vacancy_url,
                         )
@@ -138,6 +156,7 @@ class ApiContactExtractor:
                     if description:
                         yield from self._extract_from_text(
                             employer_id=employer_id,
+                            employer_name=employer_name,
                             text=description,
                             source_url=vacancy_url,
                         )
@@ -161,13 +180,14 @@ class ApiContactExtractor:
                 break
 
     def _extract_from_vacancy_contacts(
-        self, employer_id: int, contacts: dict, source_url: str
+        self, employer_id: int, employer_name: str, contacts: dict, source_url: str
     ) -> Iterator[ContactModel]:
         """
         Извлечь контакты из поля contacts вакансии.
 
         Args:
             employer_id: ID работодателя
+            employer_name: Название работодателя
             contacts: Словарь контактов из вакансии
             source_url: URL источника
 
@@ -179,6 +199,7 @@ class ApiContactExtractor:
         if email:
             yield ContactModel(
                 employer_id=employer_id,
+                employer_name=employer_name,
                 contact_type="email",
                 value=email,
                 source="api",
@@ -202,6 +223,7 @@ class ApiContactExtractor:
                 if phone:
                     yield ContactModel(
                         employer_id=employer_id,
+                        employer_name=employer_name,
                         contact_type="phone",
                         value=phone,
                         source="api",
@@ -211,6 +233,7 @@ class ApiContactExtractor:
             elif isinstance(phone_data, str):
                 yield ContactModel(
                     employer_id=employer_id,
+                    employer_name=employer_name,
                     contact_type="phone",
                     value=phone_data,
                     source="api",
@@ -219,13 +242,14 @@ class ApiContactExtractor:
                 )
 
     def _extract_from_text(
-        self, employer_id: int, text: str, source_url: str
+        self, employer_id: int, employer_name: str, text: str, source_url: str
     ) -> Iterator[ContactModel]:
         """
         Извлечь контакты из произвольного текста.
 
         Args:
             employer_id: ID работодателя
+            employer_name: Название работодателя
             text: Текст для поиска
             source_url: URL источника
 
@@ -236,6 +260,7 @@ class ApiContactExtractor:
         for email in extract_emails(text):
             yield ContactModel(
                 employer_id=employer_id,
+                employer_name=employer_name,
                 contact_type="email",
                 value=email,
                 source="api",
@@ -247,6 +272,7 @@ class ApiContactExtractor:
         for phone in extract_phones(text):
             yield ContactModel(
                 employer_id=employer_id,
+                employer_name=employer_name,
                 contact_type="phone",
                 value=phone,
                 source="api",
