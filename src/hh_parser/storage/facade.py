@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import sqlite3
 
+from .repositories.contacts import ContactsRepository
 from .repositories.employers import EmployersRepository
 from .repositories.settings import SettingsRepository
 from .repositories.vacancies import VacanciesRepository
@@ -16,3 +17,4 @@ class StorageFacade:
         self.employers = EmployersRepository(conn)
         self.vacancies = VacanciesRepository(conn)
         self.settings = SettingsRepository(conn)
+        self.contacts = ContactsRepository(conn)
