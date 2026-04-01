@@ -1,9 +1,12 @@
 """
 Модуль парсинга контактов с сайта работодателя.
 
-Поддерживает два режима работы:
-1. requests - быстрые HTTP-запросы (по умолчанию)
-2. playwright - рендеринг JavaScript с возможностью headless/visible режима
+Стратегия поиска:
+1. Получаем главную страницу сайта
+2. Извлекаем все ссылки <a href> и их anchor text
+3. Ищем ключевые слова в anchor text ссылок
+4. Переходим только по найденным ссылкам (вместо слепого перебора типовых URL)
+5. Типовые URL паттерны используем только как fallback
 """
 
 from __future__ import annotations
@@ -40,69 +43,251 @@ class SiteParserConfig:
     max_redirects: int = 5
     max_pages_per_site: int = 10
     user_agent: str = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
-    # Playwright settings
-    use_browser: bool = False
-    headless: bool = True
-    browser_timeout: float = 60000.0  # milliseconds for Playwright
 
 
 DEFAULT_CONFIG = SiteParserConfig()
 
 
 # ============================================================================
-# Типовые URL для поиска контактов
+# Ключевые слова для поиска ссылок на главной странице
 # ============================================================================
 
-CONTACT_URL_PATTERNS = [
-    "/contacts",
-    "/contact",
-    "/about/contacts",
-    "/about",
-    "/company/contacts",
-    "/company",
-    "/ru/contacts",
-    "/en/contacts",
-    "/info/contacts",
-    "/feedback",
-    "/contact-us",
-    "/about-us",
-    "/about-us/contacts",
-    "/o-kompanii",
-    "/o-kompanii/kontakty",
-    "/rekvizity",
-]
-
-
-# ============================================================================
-# Ключевые слова для поиска ссылок
-# ============================================================================
-
-CONTACT_KEYWORDS_RU = [
+CONTACT_KEYWORDS = [
+    # Контакты (основные)
     "контакты",
-    "связаться с нами",
-    "обратная связь",
-    "написать нам",
-    "позвонить нам",
-    "наши контакты",
-    "офис",
-    "адрес",
-    "телефон",
-    "реквизиты",
-]
-
-CONTACT_KEYWORDS_EN = [
+    "контакт",
     "contact",
     "contacts",
     "contact us",
-    "get in touch",
-    "reach us",
-    "connect",
+    "связаться",
+    "связаться с нами",
+    "свяжитесь с нами",
+    "обратная связь",
     "feedback",
-    "about us",
-    "office",
-    "address",
+    "get in touch",
+    "написать нам",
+    "напишите нам",
+    "write us",
+    "send message",
+    "send us a message",
+    # Телефоны
+    "телефон",
+    "телефоны",
     "phone",
+    "phones",
+    "telephone",
+    "tel",
+    "call us",
+    "позвонить",
+    "позвоните",
+    "звонок",
+    "callback",
+    "перезвонить",
+    "заказать звонок",
+    # Email
     "email",
+    "e-mail",
+    "почта",
+    "электронная почта",
+    "mail",
+    "mail us",
+    "email us",
+    # Адреса и офисы
+    "адрес",
+    "адреса",
+    "address",
+    "addresses",
+    "офис",
+    "офисы",
+    "office",
+    "offices",
+    "расположение",
+    "location",
+    "locations",
+    "как добраться",
+    "как нас найти",
+    "где мы",
+    # О компании
+    "о компании",
+    "о нас",
+    "about",
+    "about us",
+    "about company",
+    "our company",
+    "наша компания",
+    "информация о компании",
+    "company info",
+    "company information",
+    # Реквизиты
+    "реквизиты",
+    "юридический адрес",
+    "legal",
+    "legal info",
+    "requisites",
+    # HR и вакансии
+    "вакансии",
+    "вакансия",
+    "vacancies",
+    "vacancy",
+    "карьера",
+    "careers",
+    "career",
+    "работа",
+    "jobs",
+    "job",
+    "hiring",
+    "we are hiring",
+    "join us",
+    "join our team",
+    "hr",
+    "кадры",
+    "персонал",
+    "personnel",
+    "recruiting",
+    "recruitment",
+    "talent",
+    "people",
+    # Руководство
+    "руководство",
+    "директор",
+    "director",
+    "ceo",
+    "management",
+    "administration",
+    "администрация",
+    "основатель",
+    "founder",
+    "founders",
+    "owner",
+    "owners",
+    "executive",
+    "executives",
+    "leadership",
+    "board",
+    "directors",
+    # Поддержка
+    "поддержка",
+    "support",
+    "help",
+    "помощь",
+    "служба поддержки",
+    "customer service",
+    "customer support",
+    "help desk",
+    "сервис",
+    "service",
+    # Социальные сети
+    "социальные сети",
+    "соцсети",
+    "social media",
+    "socials",
+    "follow us",
+    "подписаться",
+    "telegram",
+    "whatsapp",
+    "viber",
+    "skype",
+    "linkedin",
+    "facebook",
+    "instagram",
+    "vk",
+    "vkontakte",
+    # Партнёрам
+    "партнёрам",
+    "партнерам",
+    "partners",
+    "partnership",
+    "сотрудничество",
+    "cooperation",
+    "for partners",
+    # Для клиентов
+    "клиентам",
+    "for clients",
+    "for customers",
+    "клиенты",
+    "clients",
+    "customers",
+    # Пресса и СМИ
+    "пресс",
+    "press",
+    "media",
+    "сми",
+    "journalist",
+    "журналист",
+    # Инвесторам
+    "инвесторам",
+    "investors",
+    "for investors",
+    "investor relations",
+    "акционерам",
+    "shareholders",
+    # Поставщикам
+    "поставщикам",
+    "suppliers",
+    "vendors",
+    "for suppliers",
+    "закупки",
+    "procurement",
+    "tenders",
+    "тендеры",
+    # Документы
+    "документы",
+    "documents",
+    "политика",
+    "policy",
+    "privacy",
+    "terms",
+    "условия",
+    # Команда
+    "команда",
+    "team",
+    "our team",
+    "наша команда",
+    "staff",
+    "сотрудники",
+    "employees",
+    "наши люди",
+    "our people",
+    # Форма обратной связи
+    "форма",
+    "form",
+    "contact form",
+    "форма связи",
+    "форма заявки",
+    "заявка",
+    "inquiry",
+    "request",
+    "запрос",
+    "задать вопрос",
+    "ask a question",
+    # Отделы
+    "отдел",
+    "department",
+    "отдел продаж",
+    "sales",
+    "продажи",
+    "отдел кадров",
+    "отдел маркетинга",
+    "marketing",
+    "маркетинг",
+    "pr",
+    "public relations",
+    # Дополнительное
+    "connect",
+    "reach us",
+    "reach out",
+    "lets talk",
+    "let's talk",
+    "talk to us",
+    "chat",
+    "message us",
+    "drop us a line",
+    "наши контакты",
+    "наши контактные данные",
+    "контактные данные",
+    "контактная информация",
+    "contact info",
+    "contact information",
 ]
 
 
@@ -145,14 +330,11 @@ class SiteContactParser:
             config: Конфигурация парсера
         """
         self.config = config or DEFAULT_CONFIG
-        self._browser = None
-        self._playwright = None
-        self._page = None  # Переиспользуемая вкладка
         self._logged_contacts: set[tuple[str, str]] = (
             set()
         )  # (contact_type, normalized_value)
 
-        # Инициализация requests сессии (используется всегда для первичной проверки)
+        # Инициализация requests сессии
         self.session = requests.Session()
         self.session.headers.update(
             {
@@ -162,64 +344,6 @@ class SiteContactParser:
             }
         )
         self.session.max_redirects = self.config.max_redirects
-
-    def _init_browser(self):
-        """Инициализировать браузер Playwright и создать вкладку."""
-        if self._browser is not None and self._page is not None:
-            return
-
-        try:
-            from playwright.sync_api import sync_playwright
-
-            # Запускаем браузер если ещё не запущен
-            if self._browser is None:
-                self._playwright = sync_playwright().start()
-                self._browser = self._playwright.chromium.launch(
-                    headless=self.config.headless
-                )
-
-            # Создаём вкладку если ещё не создана
-            if self._page is None:
-                self._page = self._browser.new_page()
-                self._page.set_default_timeout(self.config.browser_timeout)
-
-        except ImportError:
-            logger.error(
-                "Playwright не установлен. Установите: pip install playwright && playwright install"
-            )
-            raise
-        except Exception as e:
-            logger.error(f"Ошибка запуска браузера: {type(e).__name__}: {e}")
-            raise
-
-    def _close_browser(self):
-        """Закрыть браузер Playwright."""
-        # Закрываем вкладку
-        if self._page:
-            try:
-                self._page.close()
-            except Exception as e:
-                logger.warning(f"Ошибка при закрытии вкладки: {e}")
-            finally:
-                self._page = None
-
-        # Закрываем браузер
-        if self._browser:
-            try:
-                self._browser.close()
-            except Exception as e:
-                logger.warning(f"Ошибка при закрытии браузера: {e}")
-            finally:
-                self._browser = None
-
-        # Останавливаем Playwright
-        if self._playwright:
-            try:
-                self._playwright.stop()
-            except Exception as e:
-                logger.warning(f"Ошибка при остановке Playwright: {e}")
-            finally:
-                self._playwright = None
 
     def parse_site(
         self, employer_id: int, employer_name: str, site_url: str
@@ -287,10 +411,7 @@ class SiteContactParser:
 
     def _fetch_page(self, url: str) -> str | None:
         """
-        Получить содержимое страницы.
-
-        Если use_browser=True, использует Playwright для рендеринга JavaScript.
-        Иначе использует requests для быстрых HTTP-запросов.
+        Получить содержимое страницы через requests.
 
         Args:
             url: URL страницы
@@ -298,12 +419,6 @@ class SiteContactParser:
         Returns:
             Содержимое страницы или None
         """
-        if self.config.use_browser:
-            return self._fetch_page_browser(url)
-        else:
-            return self._fetch_page_requests(url)
-
-    def _fetch_page_requests(self, url: str) -> str | None:
         """
         Получить содержимое страницы через requests.
 
@@ -334,49 +449,6 @@ class SiteContactParser:
 
         except RequestException as e:
             logger.debug(f"Ошибка запроса {url}: {type(e).__name__}: {e}")
-            return None
-
-    def _fetch_page_browser(self, url: str) -> str | None:
-        """
-        Получить содержимое страницы через Playwright.
-
-        Использует переиспользуемую вкладку для всех запросов.
-
-        Args:
-            url: URL страницы
-
-        Returns:
-            Содержимое страницы или None
-        """
-        self._init_browser()
-
-        try:
-            response = self._page.goto(url)
-
-            if response and response.status == 200:
-                # Ждём загрузки контента (с таймаутом)
-                try:
-                    self._page.wait_for_load_state(
-                        "networkidle", timeout=30000
-                    )  # 30 сек на networkidle
-                except Exception as e:
-                    logger.warning(
-                        f"Таймаут networkidle для {url}: {e}, продолжаем с domcontentloaded"
-                    )
-                    self._page.wait_for_load_state("domcontentloaded")
-
-                content = self._page.content()
-                logger.debug(f"GET {url} -> 200 ({len(content)})")
-                return content
-            elif response and response.status == 404:
-                return None
-            else:
-                status = response.status if response else "unknown"
-                logger.debug(f"GET {url} -> {status}")
-                return None
-
-        except Exception as e:
-            logger.error(f"Ошибка браузера для {url}: {type(e).__name__}: {e}")
             return None
 
     def _extract_contacts_from_page(
@@ -434,6 +506,9 @@ class SiteContactParser:
         """
         Найти и парсить страницы контактов.
 
+        Сначала ищем ссылки на главной странице по ключевым словам в anchor text.
+        Если не нашли — используем типовые URL паттерны как fallback.
+
         Args:
             employer_id: ID работодателя
             employer_name: Название работодателя
@@ -444,16 +519,22 @@ class SiteContactParser:
             Найденные контакты
         """
         pages_visited = 0
-        urls_to_try = set()
+        urls_to_try: list[str] = []
+        seen_urls: set[str] = set()
 
-        # 1. Пробуем типовые URL
-        for pattern in CONTACT_URL_PATTERNS:
-            contact_url = base_url + pattern
-            urls_to_try.add(contact_url)
-
-        # 2. Ищем ссылки по ключевым словам в навигации
+        # 1. Ищем ссылки по ключевым словам в anchor text на главной странице
         found_links = self._find_contact_links(base_url, main_content)
-        urls_to_try.update(found_links)
+        for url in found_links:
+            if url not in seen_urls:
+                seen_urls.add(url)
+                urls_to_try.append(url)
+
+        # 2. Если ссылки не найдены — не делаем fallback, просто пропускаем сайт
+        if not urls_to_try:
+            logger.debug("Ссылки по ключевым словам не найдены, пропускаем сайт")
+            return
+        else:
+            logger.debug(f"Найдено {len(urls_to_try)} ссылок по ключевым словам")
 
         # Парсим найденные страницы
         for contact_url in urls_to_try:
@@ -474,29 +555,41 @@ class SiteContactParser:
                     url=contact_url,
                 )
 
-    def _find_contact_links(self, base_url: str, content: str) -> set[str]:
+    def _find_contact_links(self, base_url: str, content: str) -> list[str]:
         """
-        Найти ссылки на страницы контактов по ключевым словам.
+        Найти ссылки на страницы контактов по ключевым словам в anchor text.
+
+        Ищем все <a> теги, извлекаем текст ссылки (anchor text) и проверяем
+        наличие ключевых слов.
 
         Args:
             base_url: Базовый URL сайта
             content: HTML-содержимое страницы
 
         Returns:
-            Множество найденных URL
+            Список найденных URL (без дубликатов)
         """
-        found_urls = set()
+        found_urls: list[str] = []
+        seen_urls: set[str] = set()
         base_domain = urlparse(base_url).netloc
 
-        # Ищем все ссылки
-        href_pattern = re.compile(r'href=["\']([^"\']+)["\']', re.IGNORECASE)
-        all_links = href_pattern.finditer(content)
+        # Паттерн для поиска <a> тегов с href и текстом ссылки
+        # Совпадает: <a ... href="..." ...>текст ссылки</a>
+        link_pattern = re.compile(
+            r'<a\s[^>]*href=["\']([^"\']*)["\'][^>]*>(.*?)</a>',
+            re.IGNORECASE | re.DOTALL,
+        )
 
-        for match in all_links:
+        for match in link_pattern.finditer(content):
             href = match.group(1)
+            anchor_text = match.group(2)
 
             # Пропускаем якоря, javascript, mailto, tel
             if href.startswith(("#", "javascript:", "mailto:", "tel:")):
+                continue
+
+            # Пропускаем пустые href
+            if not href or href == "/":
                 continue
 
             # Нормализуем URL
@@ -504,30 +597,42 @@ class SiteContactParser:
             parsed = urlparse(full_url)
 
             # Проверяем, что это тот же домен
-            if parsed.netloc != base_domain:
+            if parsed.netloc and parsed.netloc != base_domain:
                 continue
 
-            # Проверяем по ключевым словам
-            href_lower = href.lower()
-            text_around = content[
-                max(0, match.start() - 100) : match.end() + 100
-            ].lower()
+            # Убираем дубликаты
+            normalized_url = full_url.split("#")[0].rstrip("/")
+            if normalized_url in seen_urls:
+                continue
 
-            keywords = CONTACT_KEYWORDS_RU + CONTACT_KEYWORDS_EN
-            for keyword in keywords:
-                if keyword in href_lower or keyword in text_around:
-                    found_urls.add(full_url.split("#")[0].rstrip("/"))
+            # Проверяем anchor text по ключевым словам
+            # Очищаем anchor text от HTML тегов
+            clean_anchor = re.sub(r"<[^>]+>", " ", anchor_text).strip().lower()
+
+            # Также проверяем href на наличие ключевых слов
+            href_lower = href.lower()
+
+            matched = False
+            for keyword in CONTACT_KEYWORDS:
+                if keyword in clean_anchor or keyword in href_lower:
+                    matched = True
                     break
+
+            if matched:
+                seen_urls.add(normalized_url)
+                found_urls.append(normalized_url)
+                logger.debug(
+                    f"Найдена ссылка: {normalized_url} (anchor: {clean_anchor[:50]})"
+                )
 
         return found_urls
 
     def close(self):
-        """Закрыть сессию и браузер."""
+        """Закрыть сессию."""
         try:
             self.session.close()
         except Exception as e:
             logger.warning(f"Ошибка при закрытии сессии: {e}")
-        self._close_browser()
 
     def __enter__(self):
         return self

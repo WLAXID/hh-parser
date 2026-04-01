@@ -68,17 +68,6 @@ class Operation(BaseOperation):
             default=2.0,
             help="Задержка между запросами к одному сайту (секунды)",
         )
-        parser.add_argument(
-            "--use-browser",
-            action="store_true",
-            help="Использовать браузер (Playwright) для парсинга сайтов вместо requests. "
-            "Позволяет рендерить JavaScript-сайты.",
-        )
-        parser.add_argument(
-            "--no-headless",
-            action="store_true",
-            help="Показать окно браузера (только с --use-browser). Полезно для отладки.",
-        )
 
     def run(self, tool: "HHParserTool", args) -> int | None:
         logger.info("Начало парсинга контактов работодателей")
@@ -110,16 +99,10 @@ class Operation(BaseOperation):
             api_extractor = ApiContactExtractor(tool.api_client)
 
         if args.source in ("site", "both"):
-            # Проверяем совместимость опций
-            if args.no_headless and not args.use_browser:
-                logger.warning("--no-headless игнорируется без --use-browser")
-
             site_config = SiteParserConfig(
                 timeout=args.site_timeout,
                 max_pages_per_site=args.max_pages,
                 delay_between_requests=args.delay,
-                use_browser=args.use_browser,
-                headless=not args.no_headless,
             )
             site_parser = SiteContactParser(site_config)
 
