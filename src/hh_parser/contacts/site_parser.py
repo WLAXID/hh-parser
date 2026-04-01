@@ -591,8 +591,8 @@ class SiteContactParser:
                     found_urls.add(full_url.split("#")[0].rstrip("/"))
                     break
 
-            logger.debug(f"[LINKS] Всего найдено ссылок на контакты: {len(found_urls)}")
-            return found_urls
+        logger.debug(f"[LINKS] Всего найдено ссылок на контакты: {len(found_urls)}")
+        return found_urls
 
     def close(self):
         """Закрыть сессию и браузер."""
