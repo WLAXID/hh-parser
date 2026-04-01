@@ -44,7 +44,6 @@ class BaseNamespace(argparse.Namespace):
     verbosity: int
     api_delay: float
     user_agent: str
-    proxy_url: str
     operation_run: Callable[["HHParserTool", BaseNamespace], None | int] | None
 
 
@@ -94,10 +93,6 @@ class HHParserTool:
             "--user-agent",
             help="User-Agent для каждого запроса",
         )
-        parser.add_argument(
-            "--proxy-url",
-            help="Прокси, используемый для запросов и авторизации",
-        )
 
         subparsers = parser.add_subparsers(help="commands")
 
@@ -126,51 +121,14 @@ class HHParserTool:
         self.config_dir: Path | None = None
         self.profile_id: str | None = None
 
-    @staticmethod
-    def _proxy_url_to_dict(proxy_url: str | None) -> dict[str, str]:
-        if not proxy_url:
-            return {}
-        return {
-            "http": proxy_url,
-            "https": proxy_url,
-        }
-
-    def _get_proxies(self) -> dict[str, str]:
-        proxy_url = self.proxy_url or self.config.get("proxy_url")
-        if proxy_url:
-            return self._proxy_url_to_dict(proxy_url)
-        proxies = {}
-        http_env = getenv("HTTP_PROXY") or getenv("http_proxy")
-        https_env = getenv("HTTPS_PROXY") or getenv("https_proxy") or http_env
-        if http_env:
-            proxies["http"] = http_env
-        if https_env:
-            proxies["https"] = https_env
-        return proxies
-
-    def _create_http_session(
-        self,
-        proxies: dict[str, str],
-        *,
-        log_label: str,
-    ) -> requests.Session:
-        session = requests.Session()
-        session.verify = False
-        if proxies:
-            logger.info("Use proxies for %s: %r", log_label, proxies)
-            session.proxies = proxies
-        return session
-
-    @cached_property
-    def session(self) -> requests.Session:
-        session = self._create_http_session(
-            self._get_proxies(),
-            log_label="requests",
-        )
-        session.cookies = HHOnlyCookieJar(str(self.cookies_file))
-        if self.cookies_file.exists():
-            session.cookies.load(ignore_discard=True, ignore_expires=True)
-        return session
+        @cached_property
+        def session(self) -> requests.Session:
+            session = requests.Session()
+            session.verify = False
+            session.cookies = HHOnlyCookieJar(str(self.cookies_file))
+            if self.cookies_file.exists():
+                session.cookies.load(ignore_discard=True, ignore_expires=True)
+            return session
 
     @cached_property
     def config_path(self) -> Path:

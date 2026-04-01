@@ -58,10 +58,6 @@ class BaseClient:
 
         self.lock = Lock()
 
-    @property
-    def proxies(self):
-        return self.session.proxies
-
     def _default_headers(self) -> dict[str, str]:
         return {
             "User-Agent": self.user_agent,
@@ -92,9 +88,7 @@ class BaseClient:
                 logger.debug("wait %fs before request", delay)
                 time.sleep(delay)
             has_body = method in ["POST", "PUT"]
-            payload = {
-                ["data", "json"][as_json] if has_body else "params": params
-            }
+            payload = {["data", "json"][as_json] if has_body else "params": params}
             # logger.debug(f"request info: {method = }, {url = }, {headers = }, params = {repr(params)[:255]}")
             response = self.session.request(
                 method,

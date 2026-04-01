@@ -15,7 +15,6 @@ except ImportError:
     pass
 
 from ..main import BaseOperation
-from ..utils.log import setup_logger  # We'll create this later if needed, but for now we can use logging directly
 
 if TYPE_CHECKING:
     from ..main import HHParserTool
@@ -102,31 +101,18 @@ class Operation(BaseOperation):
             username = (
                 args.username
                 or storage.settings.get_value("auth.username")
-                or (
-                    await asyncio.to_thread(
-                        input, "👤 Введите email или телефон: "
-                    )
-                )
+                or (await asyncio.to_thread(input, "👤 Введите email или телефон: "))
             ).strip()
             if not username:
                 raise RuntimeError("Empty username")
             logger.debug(f"authenticate with: {username}")
 
-        proxies = api_client.proxies
-        proxy_url = proxies.get("https")
-        chromium_args: list[str] = []
-        if proxy_url:
-            chromium_args.append(f"--proxy-server={proxy_url}")
-            logger.debug(f"Используется прокси: {proxy_url}")
+            if self.is_headless:
+                logger.debug("Headless режим активен")
 
-        if self.is_headless:
-            logger.debug("Headless режим активен")
-
-        async with async_playwright() as pw:
-            logger.debug("Запуск браузера...")
-            browser = await pw.chromium.launch(
-                headless=self.is_headless, args=chromium_args
-            )
+            async with async_playwright() as pw:
+                logger.debug("Запуск браузера...")
+                browser = await pw.chromium.launch(headless=self.is_headless)
 
             try:
                 # We don't have specific device emulation in our simplified version
@@ -188,9 +174,7 @@ class Operation(BaseOperation):
                 if self.is_automated:
                     storage.settings.set_value("auth.username", username)
                     if args.password:
-                        storage.settings.set_value(
-                            "auth.password", args.password
-                        )
+                        storage.settings.set_value("auth.password", args.password)
 
                 storage.settings.set_value("auth.last_login", datetime.now())
                 cookies = await context.cookies()
@@ -220,9 +204,7 @@ class Operation(BaseOperation):
         )
 
         print("📨 Код был отправлен. Проверьте почту или SMS.")
-        code = (
-            await asyncio.to_thread(input, "📩 Введите полученный код: ")
-        ).strip()
+        code = (await asyncio.to_thread(input, "📩 Введите полученный код: ")).strip()
         if not code:
             raise RuntimeError("Код подтверждения не может быть пустым.")
 
@@ -245,13 +227,17 @@ class Operation(BaseOperation):
         # We don't have kitty or sixel, so we'll just prompt in console
         if not (args.use_kitty or args.use_sixel):
             # We'll just print a message and ask for input in console
-            logger.warning("Требуется ввод капчи! Пожалуйста, введите текст с картинки в консоль.")
+            logger.warning(
+                "Требуется ввод капчи! Пожалуйста, введите текст с картинки в консоль."
+            )
 
         # For simplicity, we'll skip the image capture and just ask the user to type the captcha
         # In a real scenario, we would need to show the image, but we don't have the utilities.
         # We'll just ask the user to go to the page and type the captcha manually.
         # This is a limitation of our simplified version.
-        print("\n[!] Требуется ввод капчи. Пожалуйста, решите капчу в браузере и введите текст здесь.")
+        print(
+            "\n[!] Требуется ввод капчи. Пожалуйста, решите капчу в браузере и введите текст здесь."
+        )
         captcha_text = (
             await asyncio.to_thread(input, "Введите текст с картинки: ")
         ).strip()
