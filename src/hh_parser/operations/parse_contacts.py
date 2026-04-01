@@ -91,7 +91,7 @@ class Operation(BaseOperation):
             logger.info("Нет работодателей для обработки")
             return 0
 
-        logger.info(f"Найдено {len(employers_list)} работодателей для обработки")
+        logger.info(f"Найдено {len(employers_list)} работодателей")
 
         # Статистика
         stats = {
@@ -126,6 +126,8 @@ class Operation(BaseOperation):
         # Обрабатываем каждого работодателя
         for employer in employers_list:
             try:
+                logger.info(f"{employer.id} {employer.site_url}")
+
                 contacts = self._process_employer(
                     employer=employer,
                     api_extractor=api_extractor,
@@ -140,15 +142,17 @@ class Operation(BaseOperation):
                 stats["employers_processed"] += 1
                 stats["contacts_found"] += saved
 
-                for contact in unique_contacts:
-                    if contact.contact_type == "email":
-                        stats["emails_found"] += 1
-                    else:
-                        stats["phones_found"] += 1
+                emails_count = sum(
+                    1 for c in unique_contacts if c.contact_type == "email"
+                )
+                phones_count = sum(
+                    1 for c in unique_contacts if c.contact_type == "phone"
+                )
+                stats["emails_found"] += emails_count
+                stats["phones_found"] += phones_count
 
                 logger.info(
-                    f"Работодатель {employer.id} ({employer.name}): "
-                    f"найдено {len(unique_contacts)} контактов, сохранено {saved}"
+                    f"{employer.id} {employer.site_url} -> email:{emails_count} phone:{phones_count}"
                 )
 
             except Exception as e:
@@ -160,14 +164,11 @@ class Operation(BaseOperation):
             site_parser.close()
 
         # Выводим статистику
-        logger.info("=" * 50)
-        logger.info("Статистика парсинга контактов:")
-        logger.info(f"  Обработано работодателей: {stats['employers_processed']}")
-        logger.info(f"  Найдено контактов: {stats['contacts_found']}")
-        logger.info(f"    - Email: {stats['emails_found']}")
-        logger.info(f"    - Телефонов: {stats['phones_found']}")
-        logger.info(f"  Ошибок: {stats['errors']}")
-        logger.info("=" * 50)
+        logger.info(
+            f"Итого: обработано {stats['employers_processed']} работодателей, "
+            f"найдено {stats['contacts_found']} контактов "
+            f"(email: {stats['emails_found']}, phone: {stats['phones_found']})"
+        )
 
         return 0 if stats["errors"] == 0 else 1
 

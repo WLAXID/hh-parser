@@ -148,6 +148,9 @@ class SiteContactParser:
         self._browser = None
         self._playwright = None
         self._page = None  # Переиспользуемая вкладка
+        self._logged_contacts: set[tuple[str, str]] = (
+            set()
+        )  # (contact_type, normalized_value)
 
         # Инициализация requests сессии (используется всегда для первичной проверки)
         self.session = requests.Session()
@@ -163,9 +166,6 @@ class SiteContactParser:
     def _init_browser(self):
         """Инициализировать браузер Playwright и создать вкладку."""
         if self._browser is not None and self._page is not None:
-            logger.debug(
-                "[BROWSER] Браузер и вкладка уже инициализированы, переиспользуем"
-            )
             return
 
         try:
@@ -173,20 +173,15 @@ class SiteContactParser:
 
             # Запускаем браузер если ещё не запущен
             if self._browser is None:
-                logger.debug(
-                    f"[BROWSER] Запуск нового экземпляра браузера (headless={self.config.headless})"
-                )
                 self._playwright = sync_playwright().start()
                 self._browser = self._playwright.chromium.launch(
                     headless=self.config.headless
                 )
-                logger.info(f"Браузер запущен (headless={self.config.headless})")
 
             # Создаём вкладку если ещё не создана
             if self._page is None:
                 self._page = self._browser.new_page()
                 self._page.set_default_timeout(self.config.browser_timeout)
-                logger.debug("[BROWSER] Создана переиспользуемая вкладка")
 
         except ImportError:
             logger.error(
@@ -194,21 +189,17 @@ class SiteContactParser:
             )
             raise
         except Exception as e:
-            logger.error(f"[BROWSER] Ошибка запуска браузера: {type(e).__name__}: {e}")
+            logger.error(f"Ошибка запуска браузера: {type(e).__name__}: {e}")
             raise
 
     def _close_browser(self):
         """Закрыть браузер Playwright."""
-        logger.debug(
-            f"[BROWSER] Закрытие браузера (browser={self._browser is not None}, page={self._page is not None}, playwright={self._playwright is not None})"
-        )
         # Закрываем вкладку
         if self._page:
             try:
                 self._page.close()
-                logger.debug("[BROWSER] Вкладка закрыта")
             except Exception as e:
-                logger.warning(f"[BROWSER] Ошибка при закрытии вкладки: {e}")
+                logger.warning(f"Ошибка при закрытии вкладки: {e}")
             finally:
                 self._page = None
 
@@ -216,9 +207,8 @@ class SiteContactParser:
         if self._browser:
             try:
                 self._browser.close()
-                logger.debug("[BROWSER] Браузер закрыт")
             except Exception as e:
-                logger.warning(f"[BROWSER] Ошибка при закрытии браузера: {e}")
+                logger.warning(f"Ошибка при закрытии браузера: {e}")
             finally:
                 self._browser = None
 
@@ -226,9 +216,8 @@ class SiteContactParser:
         if self._playwright:
             try:
                 self._playwright.stop()
-                logger.debug("[BROWSER] Playwright остановлен")
             except Exception as e:
-                logger.warning(f"[BROWSER] Ошибка при остановке Playwright: {e}")
+                logger.warning(f"Ошибка при остановке Playwright: {e}")
             finally:
                 self._playwright = None
 
@@ -249,34 +238,17 @@ class SiteContactParser:
         # Нормализуем URL
         site_url = self._normalize_url(site_url)
 
-        logger.info(
-            f"[PARSE] Начало парсинга сайта работодателя {employer_id}: {site_url}"
-        )
-        logger.debug(
-            f"[PARSE] Используемый метод: {'browser' if self.config.use_browser else 'requests'}"
-        )
-
         # Получаем главную страницу
         try:
-            logger.debug(f"[PARSE] Запрос главной страницы: {site_url}")
             main_page_content = self._fetch_page(site_url)
             if main_page_content:
-                logger.debug(
-                    f"[PARSE] Главная страница получена, размер: {len(main_page_content)} символов"
-                )
                 # Извлекаем контакты с главной страницы
-                contacts_from_main = list(
-                    self._extract_contacts_from_page(
-                        employer_id=employer_id,
-                        employer_name=employer_name,
-                        content=main_page_content,
-                        url=site_url,
-                    )
+                yield from self._extract_contacts_from_page(
+                    employer_id=employer_id,
+                    employer_name=employer_name,
+                    content=main_page_content,
+                    url=site_url,
                 )
-                logger.debug(
-                    f"[PARSE] Найдено контактов на главной странице: {len(contacts_from_main)}"
-                )
-                yield from contacts_from_main
 
                 # Ищем страницы контактов
                 yield from self._find_contact_pages(
@@ -286,15 +258,11 @@ class SiteContactParser:
                     main_content=main_page_content,
                 )
             else:
-                logger.warning(
-                    f"[PARSE] Не удалось получить главную страницу: {site_url}"
-                )
+                logger.warning(f"Не удалось получить главную страницу: {site_url}")
         except SiteNotAccessibleError as e:
-            logger.warning(f"[PARSE] Сайт недоступен {site_url}: {e}")
+            logger.warning(f"Сайт недоступен {site_url}: {e}")
         except Exception as e:
-            logger.error(
-                f"[PARSE] Ошибка парсинга сайта {site_url}: {type(e).__name__}: {e}"
-            )
+            logger.error(f"Ошибка парсинга сайта {site_url}: {type(e).__name__}: {e}")
 
     def _normalize_url(self, url: str) -> str:
         """
@@ -346,30 +314,26 @@ class SiteContactParser:
             Содержимое страницы или None
         """
         try:
-            logger.debug(f"[REQUESTS] GET {url}")
+            logger.debug(f"GET {url}")
             response = self.session.get(
                 url,
                 timeout=(self.config.connect_timeout, self.config.timeout),
                 allow_redirects=True,
             )
-            logger.debug(
-                f"[REQUESTS] Ответ {url}: HTTP {response.status_code}, размер: {len(response.text)} символов"
-            )
+            logger.debug(f"GET {url} -> {response.status_code} ({len(response.text)})")
 
             if response.status_code == 200:
                 return response.text
             elif response.status_code == 404:
-                logger.debug(f"[REQUESTS] Страница не найдена: {url}")
                 return None
             elif response.status_code == 429:
-                logger.warning(f"[REQUESTS] Rate limit exceeded: {url}")
+                logger.warning(f"Rate limit exceeded: {url}")
                 raise RateLimitExceededError(f"Rate limit exceeded for {url}")
             else:
-                logger.debug(f"[REQUESTS] HTTP {response.status_code}: {url}")
                 return None
 
         except RequestException as e:
-            logger.debug(f"[REQUESTS] Ошибка запроса {url}: {type(e).__name__}: {e}")
+            logger.debug(f"Ошибка запроса {url}: {type(e).__name__}: {e}")
             return None
 
     def _fetch_page_browser(self, url: str) -> str | None:
@@ -387,39 +351,32 @@ class SiteContactParser:
         self._init_browser()
 
         try:
-            logger.debug(f"[BROWSER] Навигация на {url} (переиспользование вкладки)")
             response = self._page.goto(url)
 
             if response and response.status == 200:
                 # Ждём загрузки контента (с таймаутом)
-                logger.debug(f"[BROWSER] Ожидание networkidle для {url}")
                 try:
                     self._page.wait_for_load_state(
                         "networkidle", timeout=30000
                     )  # 30 сек на networkidle
                 except Exception as e:
                     logger.warning(
-                        f"[BROWSER] Таймаут networkidle для {url}: {e}, продолжаем с domcontentloaded"
+                        f"Таймаут networkidle для {url}: {e}, продолжаем с domcontentloaded"
                     )
                     self._page.wait_for_load_state("domcontentloaded")
 
                 content = self._page.content()
-                logger.debug(
-                    f"[BROWSER] Получен контент {len(content)} символов для {url}"
-                )
+                logger.debug(f"GET {url} -> 200 ({len(content)})")
                 return content
             elif response and response.status == 404:
-                logger.debug(f"Страница не найдена: {url}")
                 return None
             else:
                 status = response.status if response else "unknown"
-                logger.debug(f"HTTP {status}: {url}")
+                logger.debug(f"GET {url} -> {status}")
                 return None
 
         except Exception as e:
-            logger.error(
-                f"[BROWSER] Ошибка браузера для {url}: {type(e).__name__}: {e}"
-            )
+            logger.error(f"Ошибка браузера для {url}: {type(e).__name__}: {e}")
             return None
 
     def _extract_contacts_from_page(
@@ -437,12 +394,13 @@ class SiteContactParser:
         Yields:
             Найденные контакты
         """
-        logger.debug(f"[EXTRACT] Извлечение контактов из {url}")
-
         # Извлекаем email
-        emails_found = []
         for email in extract_emails(content):
-            emails_found.append(email)
+            normalized = normalize_email(email)
+            contact_key = ("email", normalized)
+            if contact_key not in self._logged_contacts:
+                self._logged_contacts.add(contact_key)
+                logger.debug(f"Email: {email}")
             yield ContactModel(
                 employer_id=employer_id,
                 employer_name=employer_name,
@@ -450,13 +408,16 @@ class SiteContactParser:
                 value=email,
                 source="site",
                 source_url=url,
-                normalized_value=normalize_email(email),
+                normalized_value=normalized,
             )
 
         # Извлекаем телефоны
-        phones_found = []
         for phone in extract_phones(content):
-            phones_found.append(phone)
+            normalized = normalize_phone(phone)
+            contact_key = ("phone", normalized)
+            if contact_key not in self._logged_contacts:
+                self._logged_contacts.add(contact_key)
+                logger.debug(f"Phone: {phone}")
             yield ContactModel(
                 employer_id=employer_id,
                 employer_name=employer_name,
@@ -464,12 +425,8 @@ class SiteContactParser:
                 value=phone,
                 source="site",
                 source_url=url,
-                normalized_value=normalize_phone(phone),
+                normalized_value=normalized,
             )
-
-        logger.debug(
-            f"[EXTRACT] Найдено: {len(emails_found)} email, {len(phones_found)} телефонов"
-        )
 
     def _find_contact_pages(
         self, employer_id: int, employer_name: str, base_url: str, main_content: str
@@ -493,53 +450,29 @@ class SiteContactParser:
         for pattern in CONTACT_URL_PATTERNS:
             contact_url = base_url + pattern
             urls_to_try.add(contact_url)
-        logger.debug(
-            f"[CRAWL] Добавлено {len(CONTACT_URL_PATTERNS)} типовых URL для проверки"
-        )
 
         # 2. Ищем ссылки по ключевым словам в навигации
         found_links = self._find_contact_links(base_url, main_content)
         urls_to_try.update(found_links)
-        logger.debug(
-            f"[CRAWL] Всего URL для проверки: {len(urls_to_try)} (найдено по ключевым словам: {len(found_links)})"
-        )
 
         # Парсим найденные страницы
         for contact_url in urls_to_try:
             if pages_visited >= self.config.max_pages_per_site:
-                logger.debug(
-                    f"[CRAWL] Достигнут лимит страниц ({self.config.max_pages_per_site}) для {base_url}"
-                )
                 break
 
             # Задержка между запросами
             if pages_visited > 0:
-                logger.debug(
-                    f"[CRAWL] Задержка {self.config.delay_between_requests} сек перед следующим запросом"
-                )
                 time.sleep(self.config.delay_between_requests)
 
-            logger.debug(f"[CRAWL] Проверка страницы: {contact_url}")
             content = self._fetch_page(contact_url)
             if content:
                 pages_visited += 1
-                logger.debug(
-                    f"[CRAWL] Страница получена ({pages_visited}/{self.config.max_pages_per_site}): {contact_url}"
+                yield from self._extract_contacts_from_page(
+                    employer_id=employer_id,
+                    employer_name=employer_name,
+                    content=content,
+                    url=contact_url,
                 )
-                contacts_from_page = list(
-                    self._extract_contacts_from_page(
-                        employer_id=employer_id,
-                        employer_name=employer_name,
-                        content=content,
-                        url=contact_url,
-                    )
-                )
-                logger.debug(
-                    f"[CRAWL] Найдено контактов на {contact_url}: {len(contacts_from_page)}"
-                )
-                yield from contacts_from_page
-            else:
-                logger.debug(f"[CRAWL] Страница недоступна: {contact_url}")
 
     def _find_contact_links(self, base_url: str, content: str) -> set[str]:
         """
@@ -554,12 +487,10 @@ class SiteContactParser:
         """
         found_urls = set()
         base_domain = urlparse(base_url).netloc
-        logger.debug(f"[LINKS] Поиск ссылок на контакты в {base_url}")
 
         # Ищем все ссылки
         href_pattern = re.compile(r'href=["\']([^"\']+)["\']', re.IGNORECASE)
-        all_links = list(href_pattern.finditer(content))
-        logger.debug(f"[LINKS] Найдено всего ссылок на странице: {len(all_links)}")
+        all_links = href_pattern.finditer(content)
 
         for match in all_links:
             href = match.group(1)
@@ -585,23 +516,17 @@ class SiteContactParser:
             keywords = CONTACT_KEYWORDS_RU + CONTACT_KEYWORDS_EN
             for keyword in keywords:
                 if keyword in href_lower or keyword in text_around:
-                    logger.debug(
-                        f"[LINKS] Найдена ссылка по ключевому слову '{keyword}': {full_url}"
-                    )
                     found_urls.add(full_url.split("#")[0].rstrip("/"))
                     break
 
-        logger.debug(f"[LINKS] Всего найдено ссылок на контакты: {len(found_urls)}")
         return found_urls
 
     def close(self):
         """Закрыть сессию и браузер."""
-        logger.debug("[BROWSER] Закрытие SiteContactParser (session + browser)")
         try:
             self.session.close()
-            logger.debug("[BROWSER] Requests сессия закрыта")
         except Exception as e:
-            logger.warning(f"[BROWSER] Ошибка при закрытии сессии: {e}")
+            logger.warning(f"Ошибка при закрытии сессии: {e}")
         self._close_browser()
 
     def __enter__(self):
