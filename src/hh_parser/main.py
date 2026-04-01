@@ -121,14 +121,14 @@ class HHParserTool:
         self.config_dir: Path | None = None
         self.profile_id: str | None = None
 
-        @cached_property
-        def session(self) -> requests.Session:
-            session = requests.Session()
-            session.verify = False
-            session.cookies = HHOnlyCookieJar(str(self.cookies_file))
-            if self.cookies_file.exists():
-                session.cookies.load(ignore_discard=True, ignore_expires=True)
-            return session
+    @cached_property
+    def session(self) -> requests.Session:
+        session = requests.Session()
+        session.verify = False
+        session.cookies = HHOnlyCookieJar(str(self.cookies_file))
+        if self.cookies_file.exists():
+            session.cookies.load(ignore_discard=True, ignore_expires=True)
+        return session
 
     @cached_property
     def config_path(self) -> Path:

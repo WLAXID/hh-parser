@@ -200,7 +200,7 @@ class Operation(BaseOperation):
 
     async def _handle_captcha(self, page):
         try:
-            captcha_element = await page.wait_for_selector(
+            await page.wait_for_selector(
                 self.SEL_CAPTCHA_IMAGE,
                 timeout=self.selector_timeout,
                 state="visible",
