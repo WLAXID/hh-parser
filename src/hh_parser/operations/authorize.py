@@ -67,20 +67,6 @@ class Operation(BaseOperation):
         parser.add_argument(
             "-m", "--manual", action="store_true", help="Ручной режим ввода"
         )
-        parser.add_argument(
-            "-k",
-            "--use-kitty",
-            "--kitty",
-            action="store_true",
-            help="Вывод капчи в kitty (не реализовано)",
-        )
-        parser.add_argument(
-            "-s",
-            "--use-sixel",
-            "--sixel",
-            action="store_true",
-            help="Вывод капчи в sixel (не реализовано)",
-        )
 
     def run(self, tool: HHParserTool, args) -> int | None:
         self._tool = tool
@@ -223,18 +209,9 @@ class Operation(BaseOperation):
             logger.debug("Капчи нет, продолжаем.")
             return
 
-        args = self._args
-        # We don't have kitty or sixel, so we'll just prompt in console
-        if not (args.use_kitty or args.use_sixel):
-            # We'll just print a message and ask for input in console
-            logger.warning(
-                "Требуется ввод капчи! Пожалуйста, введите текст с картинки в консоль."
-            )
-
-        # For simplicity, we'll skip the image capture and just ask the user to type the captcha
-        # In a real scenario, we would need to show the image, but we don't have the utilities.
-        # We'll just ask the user to go to the page and type the captcha manually.
-        # This is a limitation of our simplified version.
+        logger.warning(
+            "Требуется ввод капчи! Пожалуйста, введите текст с картинки в консоль."
+        )
         print(
             "\n[!] Требуется ввод капчи. Пожалуйста, решите капчу в браузере и введите текст здесь."
         )

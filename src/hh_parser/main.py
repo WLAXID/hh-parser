@@ -242,8 +242,6 @@ class HHParserTool:
                     return self.operation_run(self, args)
                 except KeyboardInterrupt:
                     logger.warning("Выполнение прервано пользователем!")
-                except api.errors.CaptchaRequired as ex:
-                    logger.error(f"Требуется ввод капчи: {ex.captcha_url}")
                 except api.errors.InternalServerError:
                     logger.error(
                         "Сервер HH.RU не смог обработать запрос из-за высокой"
