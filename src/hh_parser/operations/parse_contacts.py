@@ -163,7 +163,10 @@ class Operation(BaseOperation):
         """
         Получить список работодателей для обработки.
 
-        Фильтрует по contacts_status - обрабатывает только тех, у кого статус не установлен.
+        Фильтрует по contacts_status - обрабатывает только тех, у кого статус:
+        - None (не установлен)
+        - '' (пустая строка)
+        - 'not_checked' (требует проверки)
 
         Args:
             tool: Экземпляр HHParserTool
@@ -185,8 +188,11 @@ class Operation(BaseOperation):
             query = tool.storage.employers.find()
 
             for employer in query:
-                # Пропускаем если уже есть статус (не None и не пустая строка)
-                if employer.contacts_status:
+                # Пропускаем если уже обработан (не None и не 'not_checked')
+                if (
+                    employer.contacts_status
+                    and employer.contacts_status != "not_checked"
+                ):
                     continue
                 # Пропускаем если нет site_url
                 if not employer.site_url:

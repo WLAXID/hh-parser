@@ -5,7 +5,7 @@
 1. Получаем главную страницу сайта
 2. Извлекаем все ссылки <a href> и их anchor text
 3. Ищем ключевые слова в anchor text ссылок
-4. Переходим только по найденным ссылкам (вместо слепого перебора типовых URL)
+4. Переходим только по найденным ссылкам
 5. Типовые URL паттерны используем только как fallback
 """
 
@@ -14,7 +14,6 @@ from __future__ import annotations
 import logging
 import re
 import time
-from dataclasses import dataclass
 from typing import Iterator
 from urllib.parse import urljoin, urlparse
 
@@ -23,300 +22,12 @@ from requests.exceptions import RequestException
 
 from hh_parser.storage.models.contact import ContactModel
 
+from .config import DEFAULT_CONFIG, SiteParserConfig
+from .exceptions import RateLimitExceededError, SiteNotAccessibleError
 from .extractors import extract_emails, extract_phones, normalize_email, normalize_phone
+from .keywords import CONTACT_KEYWORDS
 
 logger = logging.getLogger(__name__)
-
-
-# ============================================================================
-# Конфигурация парсера
-# ============================================================================
-
-
-@dataclass
-class SiteParserConfig:
-    """Конфигурация парсера сайта."""
-
-    timeout: float = 30.0
-    connect_timeout: float = 10.0
-    delay_between_requests: float = 2.0
-    max_redirects: int = 5
-    max_pages_per_site: int = 10
-    user_agent: str = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
-
-
-DEFAULT_CONFIG = SiteParserConfig()
-
-
-# ============================================================================
-# Ключевые слова для поиска ссылок на главной странице
-# ============================================================================
-
-CONTACT_KEYWORDS = [
-    # Контакты (основные)
-    "контакты",
-    "контакт",
-    "contact",
-    "contacts",
-    "contact us",
-    "связаться",
-    "связаться с нами",
-    "свяжитесь с нами",
-    "обратная связь",
-    "feedback",
-    "get in touch",
-    "написать нам",
-    "напишите нам",
-    "write us",
-    "send message",
-    "send us a message",
-    # Телефоны
-    "телефон",
-    "телефоны",
-    "phone",
-    "phones",
-    "telephone",
-    "tel",
-    "call us",
-    "позвонить",
-    "позвоните",
-    "звонок",
-    "callback",
-    "перезвонить",
-    "заказать звонок",
-    # Email
-    "email",
-    "e-mail",
-    "почта",
-    "электронная почта",
-    "mail",
-    "mail us",
-    "email us",
-    # Адреса и офисы
-    "адрес",
-    "адреса",
-    "address",
-    "addresses",
-    "офис",
-    "офисы",
-    "office",
-    "offices",
-    "расположение",
-    "location",
-    "locations",
-    "как добраться",
-    "как нас найти",
-    "где мы",
-    # О компании
-    "о компании",
-    "о нас",
-    "about",
-    "about us",
-    "about company",
-    "our company",
-    "наша компания",
-    "информация о компании",
-    "company info",
-    "company information",
-    # Реквизиты
-    "реквизиты",
-    "юридический адрес",
-    "legal",
-    "legal info",
-    "requisites",
-    # HR и вакансии
-    "вакансии",
-    "вакансия",
-    "vacancies",
-    "vacancy",
-    "карьера",
-    "careers",
-    "career",
-    "работа",
-    "jobs",
-    "job",
-    "hiring",
-    "we are hiring",
-    "join us",
-    "join our team",
-    "hr",
-    "кадры",
-    "персонал",
-    "personnel",
-    "recruiting",
-    "recruitment",
-    "talent",
-    "people",
-    # Руководство
-    "руководство",
-    "директор",
-    "director",
-    "ceo",
-    "management",
-    "administration",
-    "администрация",
-    "основатель",
-    "founder",
-    "founders",
-    "owner",
-    "owners",
-    "executive",
-    "executives",
-    "leadership",
-    "board",
-    "directors",
-    # Поддержка
-    "поддержка",
-    "support",
-    "help",
-    "помощь",
-    "служба поддержки",
-    "customer service",
-    "customer support",
-    "help desk",
-    "сервис",
-    "service",
-    # Социальные сети
-    "социальные сети",
-    "соцсети",
-    "social media",
-    "socials",
-    "follow us",
-    "подписаться",
-    "telegram",
-    "whatsapp",
-    "viber",
-    "skype",
-    "linkedin",
-    "facebook",
-    "instagram",
-    "vk",
-    "vkontakte",
-    # Партнёрам
-    "партнёрам",
-    "партнерам",
-    "partners",
-    "partnership",
-    "сотрудничество",
-    "cooperation",
-    "for partners",
-    # Для клиентов
-    "клиентам",
-    "for clients",
-    "for customers",
-    "клиенты",
-    "clients",
-    "customers",
-    # Пресса и СМИ
-    "пресс",
-    "press",
-    "media",
-    "сми",
-    "journalist",
-    "журналист",
-    # Инвесторам
-    "инвесторам",
-    "investors",
-    "for investors",
-    "investor relations",
-    "акционерам",
-    "shareholders",
-    # Поставщикам
-    "поставщикам",
-    "suppliers",
-    "vendors",
-    "for suppliers",
-    "закупки",
-    "procurement",
-    "tenders",
-    "тендеры",
-    # Документы
-    "документы",
-    "documents",
-    "политика",
-    "policy",
-    "privacy",
-    "terms",
-    "условия",
-    # Команда
-    "команда",
-    "team",
-    "our team",
-    "наша команда",
-    "staff",
-    "сотрудники",
-    "employees",
-    "наши люди",
-    "our people",
-    # Форма обратной связи
-    "форма",
-    "form",
-    "contact form",
-    "форма связи",
-    "форма заявки",
-    "заявка",
-    "inquiry",
-    "request",
-    "запрос",
-    "задать вопрос",
-    "ask a question",
-    # Отделы
-    "отдел",
-    "department",
-    "отдел продаж",
-    "sales",
-    "продажи",
-    "отдел кадров",
-    "отдел маркетинга",
-    "marketing",
-    "маркетинг",
-    "pr",
-    "public relations",
-    # Дополнительное
-    "connect",
-    "reach us",
-    "reach out",
-    "lets talk",
-    "let's talk",
-    "talk to us",
-    "chat",
-    "message us",
-    "drop us a line",
-    "наши контакты",
-    "наши контактные данные",
-    "контактные данные",
-    "контактная информация",
-    "contact info",
-    "contact information",
-]
-
-
-# ============================================================================
-# Исключения
-# ============================================================================
-
-
-class SiteParserError(Exception):
-    """Базовая ошибка парсера сайта."""
-
-    pass
-
-
-class SiteNotAccessibleError(SiteParserError):
-    """Сайт недоступен."""
-
-    pass
-
-
-class RateLimitExceededError(SiteParserError):
-    """Превышен лимит запросов."""
-
-    pass
-
-
-# ============================================================================
-# Парсер сайта
-# ============================================================================
 
 
 class SiteContactParser:
@@ -419,15 +130,6 @@ class SiteContactParser:
         Returns:
             Содержимое страницы или None
         """
-        """
-        Получить содержимое страницы через requests.
-
-        Args:
-            url: URL страницы
-
-        Returns:
-            Содержимое страницы или None
-        """
         try:
             logger.debug(f"GET {url}")
             response = self.session.get(
@@ -473,15 +175,15 @@ class SiteContactParser:
             if contact_key not in self._logged_contacts:
                 self._logged_contacts.add(contact_key)
                 logger.debug(f"Email: {email}")
-            yield ContactModel(
-                employer_id=employer_id,
-                employer_name=employer_name,
-                contact_type="email",
-                value=email,
-                source="site",
-                source_url=url,
-                normalized_value=normalized,
-            )
+                yield ContactModel(
+                    employer_id=employer_id,
+                    employer_name=employer_name,
+                    contact_type="email",
+                    value=email,
+                    source="site",
+                    source_url=url,
+                    normalized_value=normalized,
+                )
 
         # Извлекаем телефоны
         for phone in extract_phones(content):
@@ -490,15 +192,15 @@ class SiteContactParser:
             if contact_key not in self._logged_contacts:
                 self._logged_contacts.add(contact_key)
                 logger.debug(f"Phone: {phone}")
-            yield ContactModel(
-                employer_id=employer_id,
-                employer_name=employer_name,
-                contact_type="phone",
-                value=phone,
-                source="site",
-                source_url=url,
-                normalized_value=normalized,
-            )
+                yield ContactModel(
+                    employer_id=employer_id,
+                    employer_name=employer_name,
+                    contact_type="phone",
+                    value=phone,
+                    source="site",
+                    source_url=url,
+                    normalized_value=normalized,
+                )
 
     def _find_contact_pages(
         self, employer_id: int, employer_name: str, base_url: str, main_content: str
@@ -639,3 +341,6 @@ class SiteContactParser:
 
     def __exit__(self, exc_type, exc_val, exc_tb):
         self.close()
+
+
+__all__ = ("SiteContactParser",)
