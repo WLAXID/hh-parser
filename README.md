@@ -129,6 +129,18 @@ playwright install chromium
 
 После установки будет доступна команда `hh-parser`.
 
+### Зависимости
+
+Пакет использует следующие зависимости:
+
+| Пакет            | Назначение                |
+| ---------------- | ------------------------- |
+| `requests`       | HTTP-запросы к API        |
+| `urllib3`        | HTTP-соединения           |
+| `playwright`     | Авторизация через браузер |
+| `beautifulsoup4` | Парсинг HTML-страниц      |
+| `lxml`           | XML/HTML парсер           |
+
 ## Быстрый старт
 
 ```bash
@@ -257,18 +269,15 @@ hh-parser parse-contacts [опции]
 | `--source <источник>`   | `both`       | Источник контактов: `api`, `site` или `both`               |
 | `--employer-id <id>...` | Все          | ID конкретных работодателей для парсинга                   |
 | `--limit <число>`       | 0            | Ограничение количества работодателей (0 = без ограничений) |
-| `--skip-with-contacts`  | Выкл.        | Пропустить работодателей, у которых уже есть контакты      |
 | `--site-timeout <сек>`  | 30           | Таймаут для запросов к сайтам работодателей                |
 | `--max-pages <число>`   | 10           | Максимум страниц для парсинга на одном сайте               |
 | `--delay <сек>`         | 2.0          | Задержка между запросами к одному сайту                    |
-| `--use-browser`         | Выкл.        | Использовать Playwright для рендеринга JavaScript-сайтов   |
-| `--no-headless`         | Выкл.        | Показать окно браузера (только с `--use-browser`)          |
 
 **Алгоритм поиска контактов на сайте:**
 
 1. Парсинг главной страницы сайта
-2. Поиск ссылок по ключевым словам ("контакты", "contact", "связаться" и др.)
-3. Проверка типовых URL (`/contacts`, `/about`, `/contact` и др.)
+2. Поиск ссылок по ключевым словам в anchor text ("контакты", "contact", "связаться" и др.)
+3. Переход только по найденным ссылкам
 4. Извлечение email и телефонов с найденных страниц
 5. Дедупликация и нормализация контактов
 
@@ -287,14 +296,8 @@ hh-parser parse-contacts --source site
 # Для конкретных работодателей
 hh-parser parse-contacts --employer-id 12345 67890
 
-# Пропустить уже обработанных
-hh-parser parse-contacts --skip-with-contacts
-
 # С кастомными настройками
 hh-parser parse-contacts --site-timeout 60 --max-pages 5 --delay 3.0
-
-# Использовать браузер для JavaScript-сайтов
-hh-parser parse-contacts --use-browser
 ```
 
 **Структура таблицы контактов в БД:**
@@ -444,25 +447,24 @@ hh-parser migrate-db [опции]
 
 **Опции:**
 
-| Опция         | Описание                          |
-| ------------- | --------------------------------- |
-| `--list`      | Показать список миграций          |
-| `--dry-run`   | Показать изменения без применения |
-| `--apply`     | Автоматическая миграция           |
-| `--apply 123` | Миграция файла 123.sql            |
-| `--status`    | Показать статус БД                |
+| Опция           | Описание                                      |
+| --------------- | --------------------------------------------- |
+| `--list`        | Показать список миграций                      |
+| `--apply`       | Автоматическая миграция (синхронизация схемы) |
+| `--apply <имя>` | Применить конкретную миграцию                 |
+| `--status`      | Показать статус БД                            |
 
 **Примеры:**
 
 ```bash
-# Применить все миграции
+# Применить автоматические миграции
 hh-parser migrate-db --apply
 
 # Показать список миграций
 hh-parser migrate-db --list
 
-# Показать изменения без применения
-hh-parser migrate-db --dry-run
+# Показать статус базы данных
+hh-parser migrate-db --status
 ```
 
 ## Глобальные параметры
@@ -558,23 +560,23 @@ hh-parser/
 
 ### API модуль ([`src/hh_parser/api/`](src/hh_parser/api/))
 
-- [`ApiClient`](src/hh_parser/api/client.py:201) — клиент для работы с hh.ru API
-- [`OAuthClient`](src/hh_parser/api/client.py:144) — клиент для OAuth авторизации
+- [`ApiClient`](src/hh_parser/api/client.py) — клиент для работы с hh.ru API
+- [`OAuthClient`](src/hh_parser/api/client.py) — клиент для OAuth авторизации
 - Автоматическое обновление токена доступа
 - Thread-safe запросы с настраиваемой задержкой
 
 ### Модуль контактов ([`src/hh_parser/contacts/`](src/hh_parser/contacts/))
 
-- [`ApiContactExtractor`](src/hh_parser/contacts/api_extractor.py:21) — извлечение контактов из API
+- [`ApiContactExtractor`](src/hh_parser/contacts/api_extractor.py) — извлечение контактов из API
 - [`SiteContactParser`](src/hh_parser/contacts/site_parser.py) — парсинг сайтов работодателей
-- [`extract_emails()`](src/hh_parser/contacts/extractors.py:87) / [`extract_phones()`](src/hh_parser/contacts/extractors.py) — regex-экстракторы
-- [`deduplicate_contacts()`](src/hh_parser/contacts/deduplication.py:15) — дедупликация с приоритизацией
+- [`extract_emails()`](src/hh_parser/contacts/extractors.py) / [`extract_phones()`](src/hh_parser/contacts/extractors.py) — regex-экстракторы
+- [`deduplicate_contacts()`](src/hh_parser/contacts/deduplication.py) — дедупликация с приоритизацией
 
 ### Хранилище ([`src/hh_parser/storage/`](src/hh_parser/storage/))
 
-- [`StorageFacade`](src/hh_parser/storage/facade.py:10) — единая точка доступа к данным
-- [`BaseRepository`](src/hh_parser/storage/repositories/base.py:17) — базовый репозиторий с CRUD операциями
-- [`EmployerModel`](src/hh_parser/storage/models/employer.py:8) / [`ContactModel`](src/hh_parser/storage/models/contact.py:9) — модели данных
+- [`StorageFacade`](src/hh_parser/storage/facade.py) — единая точка доступа к данным
+- [`BaseRepository`](src/hh_parser/storage/repositories/base.py) — базовый репозиторий с CRUD операциями
+- [`EmployerModel`](src/hh_parser/storage/models/employer.py) / [`ContactModel`](src/hh_parser/storage/models/contact.py) — модели данных
 - Автоматические миграции схемы БД
 
 ### Операции ([`src/hh_parser/operations/`](src/hh_parser/operations/))

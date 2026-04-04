@@ -6,7 +6,7 @@ build-backend = "setuptools.build_meta"
 name = "hh-parser"
 description = "Парсер для сбора данных о работодателях и контактах с сайта hh.ru"
 readme = "README.md"
-license = Apache-2.0
+license = "Apache-2.0"
 requires-python = ">=3.8"
 authors = [
     {name = "WLAXID"}
@@ -29,6 +29,8 @@ dependencies = [
     "requests",
     "urllib3",
     "playwright",
+    "beautifulsoup4",
+    "lxml",
 ]
 
 [project.urls]
