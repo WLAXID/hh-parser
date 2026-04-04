@@ -4,7 +4,7 @@ BEGIN;
 CREATE TABLE IF NOT EXISTS employers (
     id INTEGER PRIMARY KEY,
     name TEXT NOT NULL,
-    contacts_status TEXT,
+    contacts_status TEXT DEFAULT 'not_checked',
     -- Статус контактов: not_checked/no_contacts/has_contacts
     site_url TEXT,
     alternate_url TEXT,

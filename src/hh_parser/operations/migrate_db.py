@@ -420,14 +420,10 @@ class Operation(BaseOperation):
         )
         parser.add_argument(
             "--apply",
-            action="store_true",
-            help="Применить автоматические миграции (синхронизировать схему БД с SQL-файлами)",
-        )
-        parser.add_argument(
-            "--apply-file",
-            type=str,
+            nargs="?",
+            const=None,
             metavar="NAME",
-            help="Применить конкретную миграцию из директории migrations",
+            help="Без аргумента: применить автоматические миграции. С аргументом: применить конкретную миграцию из директории migrations",
         )
         parser.add_argument(
             "--status",
@@ -459,22 +455,26 @@ class Operation(BaseOperation):
         if args.status:
             return self._show_status(db_path)
 
-        # Применить конкретную миграцию из файла
-        if args.apply_file:
-            return self._apply_file_migration(db_path, args.apply_file)
-
-        # Автоматическая миграция
-        if args.apply:
-            return self._auto_migrate(db_path)
+        # Применить миграцию
+        if args.apply is not None:
+            # Если передано имя миграции — применить конкретную
+            if args.apply:
+                return self._apply_file_migration(db_path, args.apply)
+            # Если --apply без аргумента — автоматическая миграция
+            else:
+                return self._auto_migrate(db_path)
 
         # Если нет аргументов — показать справку
         print(
             "Используйте --apply для автоматической миграции или --status для проверки."
         )
         print("Примеры:")
-        print("  hh-parser migrate-db --apply    # применить автоматические миграции")
-        print("  hh-parser migrate-db --status   # показать статус БД")
-        print("  hh-parser migrate-db --list     # показать файловые миграции")
+        print(" hh-parser migrate-db --apply # применить автоматические миграции")
+        print(
+            " hh-parser migrate-db --apply 2026-04-04_set_contacts_status_default # применить конкретную миграцию"
+        )
+        print(" hh-parser migrate-db --status # показать статус БД")
+        print(" hh-parser migrate-db --list # показать файловые миграции")
         return 0
 
     def _show_status(self, db_path) -> int:
