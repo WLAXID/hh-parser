@@ -231,8 +231,8 @@ def get_default_value(col_def: dict) -> str:
     elif "REAL" in col_type or "FLOAT" in col_type or "DOUBLE" in col_type:
         return "0.0"
     else:
-        # TEXT и другие типы
-        return "''"
+        # TEXT и другие типы - возвращаем NULL для nullable полей
+        return "NULL"
 
 
 def recreate_table_with_data(

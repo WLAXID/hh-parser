@@ -46,11 +46,6 @@ class Operation(BaseOperation):
             help="Ограничение количества работодателей (0 = без ограничений)",
         )
         parser.add_argument(
-            "--skip-with-contacts",
-            action="store_true",
-            help="Пропустить работодателей, у которых уже есть контакты",
-        )
-        parser.add_argument(
             "--site-timeout",
             type=int,
             default=30,
@@ -80,7 +75,7 @@ class Operation(BaseOperation):
             logger.info("Нет работодателей для обработки")
             return 0
 
-        logger.info(f"Найдено {len(employers_list)} работодателей")
+        logger.info(f"Найдено {len(employers_list)} работодателей для обработки")
 
         # Статистика
         stats = {
@@ -122,6 +117,15 @@ class Operation(BaseOperation):
                 unique_contacts = deduplicate_contacts(contacts)
                 saved = tool.storage.contacts.save_many(unique_contacts)
 
+                # Обновляем статус контактов работодателя
+                if len(unique_contacts) == 0:
+                    # Контакты не найдены
+                    employer.contacts_status = "no_contacts"
+                else:
+                    # Контакты найдены
+                    employer.contacts_status = "has_contacts"
+                tool.storage.employers.save(employer)
+
                 stats["employers_processed"] += 1
                 stats["contacts_found"] += saved
 
@@ -135,7 +139,7 @@ class Operation(BaseOperation):
                 stats["phones_found"] += phones_count
 
                 logger.info(
-                    f"{employer.id} {employer.site_url} -> email:{emails_count} phone:{phones_count}"
+                    f"{employer.id} {employer.site_url} -> email:{emails_count} phone:{phones_count} status:{employer.contacts_status}"
                 )
 
             except Exception as e:
@@ -159,6 +163,8 @@ class Operation(BaseOperation):
         """
         Получить список работодателей для обработки.
 
+        Фильтрует по contacts_status - обрабатывает только тех, у кого статус не установлен.
+
         Args:
             tool: Экземпляр HHParserTool
             args: Аргументы CLI
@@ -175,22 +181,17 @@ class Operation(BaseOperation):
                 else:
                     logger.warning(f"Работодатель {emp_id} не найден в БД")
         else:
-            # Все работодатели с site_url
+            # Все работодатели с site_url и без статуса контактов
             query = tool.storage.employers.find()
 
-            if args.skip_with_contacts:
-                # Получаем ID работодателей с контактами
-                employers_with_contacts = set(
-                    tool.storage.contacts.get_employers_with_contacts()
-                )
-                for employer in query:
-                    if employer.id not in employers_with_contacts:
-                        if employer.site_url:
-                            yield employer
-            else:
-                for employer in query:
-                    if employer.site_url:
-                        yield employer
+            for employer in query:
+                # Пропускаем если уже есть статус (не None и не пустая строка)
+                if employer.contacts_status:
+                    continue
+                # Пропускаем если нет site_url
+                if not employer.site_url:
+                    continue
+                yield employer
 
         # Применяем лимит
         # Note: это делается через генератор, поэтому лимит применяется при итерации

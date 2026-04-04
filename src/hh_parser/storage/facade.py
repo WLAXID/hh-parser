@@ -4,7 +4,6 @@ import sqlite3
 
 from .repositories.contacts import ContactsRepository
 from .repositories.employers import EmployersRepository
-from .repositories.settings import SettingsRepository
 from .repositories.vacancies import VacanciesRepository
 from .utils import init_db
 
@@ -16,5 +15,4 @@ class StorageFacade:
         init_db(conn)
         self.employers = EmployersRepository(conn)
         self.vacancies = VacanciesRepository(conn)
-        self.settings = SettingsRepository(conn)
         self.contacts = ContactsRepository(conn)

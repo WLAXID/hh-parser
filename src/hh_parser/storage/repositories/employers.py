@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import Iterator
 
 from hh_parser.storage.models.employer import EmployerModel
+
 from .base import BaseRepository
 
 

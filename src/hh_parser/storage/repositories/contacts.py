@@ -132,3 +132,21 @@ class ContactsRepository(BaseRepository):
 
         cursor = self.conn.execute(query)
         return [row[0] for row in cursor.fetchall()]
+
+    def get_last_processed_employer_id(self) -> int | None:
+        """
+        Получить ID последнего работодателя, для которого были сохранены контакты.
+        Используется для возобновления парсинга с последнего места.
+
+        Returns:
+            ID последнего обработанного работодателя или None, если контактов нет
+        """
+        cursor = self.conn.execute(
+            """
+            SELECT employer_id FROM contacts
+            ORDER BY created_at DESC, id DESC
+            LIMIT 1
+            """
+        )
+        row = cursor.fetchone()
+        return row[0] if row else None

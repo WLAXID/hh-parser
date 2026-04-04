@@ -4,7 +4,6 @@ import argparse
 import asyncio
 import logging
 import typing
-from datetime import datetime
 from http.cookiejar import Cookie
 from typing import TYPE_CHECKING
 from urllib.parse import parse_qs, urlsplit
@@ -86,7 +85,6 @@ class Operation(BaseOperation):
         if self.is_automated:
             username = (
                 args.username
-                or storage.settings.get_value("auth.username")
                 or (await asyncio.to_thread(input, "👤 Введите email или телефон: "))
             ).strip()
             if not username:
@@ -134,9 +132,7 @@ class Operation(BaseOperation):
                     await page.fill(self.SEL_LOGIN_INPUT, username)
                     logger.debug("Логин введен")
 
-                    password = args.password or storage.settings.get_value(
-                        "auth.password"
-                    )
+                    password = args.password
                     if password:
                         await self._direct_login(page, password)
                     else:
@@ -158,13 +154,8 @@ class Operation(BaseOperation):
                 print("🔓 Авторизация прошла успешно!")
 
                 if self.is_automated:
-                    storage.settings.set_value("auth.username", username)
-                    if args.password:
-                        storage.settings.set_value("auth.password", args.password)
-
-                storage.settings.set_value("auth.last_login", datetime.now())
-                cookies = await context.cookies()
-                self._set_session_cookies(cookies)
+                    cookies = await context.cookies()
+                    self._set_session_cookies(cookies)
 
             finally:
                 logger.debug("Закрытие браузера")

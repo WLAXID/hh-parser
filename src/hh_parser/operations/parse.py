@@ -169,6 +169,11 @@ class Operation(BaseOperation):
                     # Извлекаем нужные поля
                     name = emp_details.get("name")
                     site_url = emp_details.get("site_url")
+                    # Нормализуем site_url: пустая строка или только протокол -> None
+                    if site_url:
+                        site_url = site_url.strip()
+                        if not site_url or site_url in ("http://", "https://"):
+                            site_url = None
                     alternate_url = emp_details.get("alternate_url")
                     open_vacancies = emp_details.get("open_vacancies", 0)
 
