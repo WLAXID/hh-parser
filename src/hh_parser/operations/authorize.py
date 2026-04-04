@@ -80,7 +80,6 @@ class Operation(BaseOperation):
     async def _run(self) -> None:
         args = self._args
         api_client = self._tool.api_client
-        storage = self._tool.storage
 
         if self.is_automated:
             username = (
