@@ -421,9 +421,9 @@ class Operation(BaseOperation):
         parser.add_argument(
             "--apply",
             nargs="?",
-            const=None,
+            const="auto",
             metavar="NAME",
-            help="Без аргумента: применить автоматические миграции. С аргументом: применить конкретную миграцию из директории migrations",
+            help="Применить миграции. Без аргумента --apply: автоматическая миграция (синхронизация схемы БД с SQL-файлами). С аргументом --apply NAME: применить конкретную миграцию из директории migrations (имя без .sql)",
         )
         parser.add_argument(
             "--status",
@@ -456,13 +456,13 @@ class Operation(BaseOperation):
             return self._show_status(db_path)
 
         # Применить миграцию
-        if args.apply is not None:
-            # Если передано имя миграции — применить конкретную
-            if args.apply:
-                return self._apply_file_migration(db_path, args.apply)
-            # Если --apply без аргумента — автоматическая миграция
-            else:
+        if args.apply:
+            # Если --apply без аргумента (const="auto") — автоматическая миграция
+            if args.apply == "auto":
                 return self._auto_migrate(db_path)
+            # Если передано имя миграции — применить конкретную
+            else:
+                return self._apply_file_migration(db_path, args.apply)
 
         # Если нет аргументов — показать справку
         print(

@@ -1,27 +1,40 @@
 # HH Parser
 
-Парсер для сбора данных о работодателях с сайта hh.ru с использованием официального API.
+Парсер для сбора данных о работодателях и контактах с сайта hh.ru с использованием официального API.
 
 ## Содержание
 
+- [Возможности](#возможности)
 - [Установка](#установка)
 - [Быстрый старт](#быстрый-старт)
 - [Команды](#команды)
-- [Авторизация](#авторизация)
-- [Парсинг работодателей](#парсинг-работодателей)
-- [Парсинг контактов](#парсинг-контактов)
-- [Экспорт данных](#экспорт-данных)
-- [Справочники (отрасли и регионы)](#справочники-отрасли-и-регионы)
-- [Информация о пользователе](#информация-о-пользователе)
+  - [Авторизация](#авторизация)
+  - [Парсинг работодателей](#парсинг-работодателей)
+  - [Парсинг контактов](#парсинг-контактов)
+  - [Экспорт данных](#экспорт-данных)
+  - [Справочники](#справочники-отрасли-и-регионы)
+  - [Информация о пользователе](#информация-о-пользователе)
+  - [Миграция БД](#миграция-базы-данных)
 - [Глобальные параметры](#глобальные-параметры)
 - [Конфигурация](#конфигурация)
+- [Архитектура](#архитектура)
 - [Структура проекта](#структура-проекта)
+
+## Возможности
+
+- **Парсинг работодателей** — сбор информации о компаниях с hh.ru API
+- **Извлечение контактов** — поиск email и телефонов из API и сайтов работодателей
+- **Дедупликация** — автоматическое удаление дубликатов контактов
+- **Экспорт данных** — выгрузка в CSV и JSON форматы
+- **Профили** — поддержка нескольких профилей конфигурации
+- **Миграции БД** — автоматическое создание и обновление схемы базы
 
 ## Установка
 
 ### Требования
 
 - Python 3.8+
+- Playwright (для авторизации)
 
 ### Установка
 
@@ -41,6 +54,9 @@ source .venv/bin/activate
 
 # Установить пакет в режиме разработки
 pip install -e .
+
+# Установить Playwright браузер (для авторизации)
+playwright install chromium
 ```
 
 После установки будет доступна команда `hh-parser`.
@@ -51,10 +67,13 @@ pip install -e .
 # 1. Авторизоваться
 hh-parser authorize your_email@example.com
 
-# 2. Запустить парсинг
+# 2. Запустить парсинг работодателей
 hh-parser parse
 
-# 3. Экспортировать результаты
+# 3. Извлечь контакты
+hh-parser parse-contacts
+
+# 4. Экспортировать результаты
 hh-parser export --output employers.csv
 ```
 
@@ -66,7 +85,7 @@ hh-parser export --output employers.csv
 hh-parser authorize <username> [опции]
 ```
 
-Авторизация в системе hh.ru для получения токена доступа.
+Авторизация в системе hh.ru для получения токена доступа через Playwright.
 
 **Алиасы:** `authenticate`, `auth`, `login`
 
@@ -83,8 +102,6 @@ hh-parser authorize <username> [опции]
 | `-p, --password <пароль>` | Пароль для входа                       |
 | `-n, --no-headless`       | Показать окно браузера при авторизации |
 | `-m, --manual`            | Ручной режим ввода данных              |
-| `-k, --use-kitty`         | Вывод капчи в kitty (не реализовано)   |
-| `-s, --use-sixel`         | Вывод капчи в sixel (не реализовано)   |
 
 **Примеры:**
 
@@ -112,14 +129,15 @@ hh-parser parse [опции]
 
 **Опции:**
 
-| Опция                   | По умолчанию | Описание                                                  |
-| ----------------------- | ------------ | --------------------------------------------------------- |
-| `--area <id> [<id>...]` | Все регионы  | Фильтр по региону (ID региона, можно указать несколько)   |
-| `--only-with-vacancies` | Выкл.        | Только работодатели с открытыми вакансиями                |
-| `--sort-by <метод>`     | `by_name`    | Сортировка: `by_name` или `by_vacancies_open`             |
-| `--per-page <число>`    | 100          | Количество результатов на странице (макс. 100)            |
-| `--mode <режим>`        | `fast`       | Режим работы (см. ниже)                                   |
-| `--resume`              | Выкл.        | Возобновить парсинг, пропуская существующих работодателей |
+| Опция                       | По умолчанию | Описание                                                  |
+| --------------------------- | ------------ | --------------------------------------------------------- |
+| `--area <id> [<id>...]`     | Все регионы  | Фильтр по региону (ID региона, можно указать несколько)   |
+| `--industry <id> [<id>...]` | Все отрасли  | Фильтр по отрасли (ID отрасли)                            |
+| `--only-with-vacancies`     | Выкл.        | Только работодатели с открытыми вакансиями                |
+| `--sort-by <метод>`         | `by_name`    | Сортировка: `by_name` или `by_vacancies_open`             |
+| `--per-page <число>`        | 100          | Количество результатов на странице (макс. 100)            |
+| `--mode <режим>`            | `fast`       | Режим работы (см. ниже)                                   |
+| `--resume`                  | Выкл.        | Возобновить парсинг, пропуская существующих работодателей |
 
 **Режимы работы (`--mode`):**
 
@@ -181,8 +199,8 @@ hh-parser parse-contacts [опции]
 **Алгоритм поиска контактов на сайте:**
 
 1. Парсинг главной страницы сайта
-2. Проверка типовых URL (`/contacts`, `/about`, `/contact` и др.)
-3. Поиск ссылок по ключевым словам ("контакты", "contact", "связаться" и др.)
+2. Поиск ссылок по ключевым словам ("контакты", "contact", "связаться" и др.)
+3. Проверка типовых URL (`/contacts`, `/about`, `/contact` и др.)
 4. Извлечение email и телефонов с найденных страниц
 5. Дедупликация и нормализация контактов
 
@@ -207,17 +225,8 @@ hh-parser parse-contacts --skip-with-contacts
 # С кастомными настройками
 hh-parser parse-contacts --site-timeout 60 --max-pages 5 --delay 3.0
 
-# Ограничить количество работодателей
-hh-parser parse-contacts --limit 100
-
 # Использовать браузер для JavaScript-сайтов
 hh-parser parse-contacts --use-browser
-
-# Показать окно браузера (для отладки)
-hh-parser parse-contacts --use-browser --no-headless
-
-# Комбо: браузер + видимый режим + конкретные работодатели
-hh-parser parse-contacts --use-browser --no-headless --employer-id 12345
 ```
 
 **Структура таблицы контактов в БД:**
@@ -226,6 +235,7 @@ hh-parser parse-contacts --use-browser --no-headless --employer-id 12345
 | ------------------ | -------- | ------------------------------------------- |
 | `id`               | INTEGER  | Первичный ключ                              |
 | `employer_id`      | INTEGER  | ID работодателя (внешний ключ)              |
+| `employer_name`    | TEXT     | Название работодателя                       |
 | `contact_type`     | TEXT     | Тип контакта: `email` или `phone`           |
 | `value`            | TEXT     | Исходное значение контакта                  |
 | `source`           | TEXT     | Источник: `api` или `site`                  |
@@ -265,9 +275,6 @@ hh-parser export --output top_employers.csv --min-vacancies 10
 
 # Экспорт работодателей из конкретного региона
 hh-parser export --output moscow.csv --area "Москва"
-
-# Экспорт в JSON с фильтрами
-hh-parser export --format json --output filtered.json --min-vacancies 5 --area "Москва"
 ```
 
 ### Справочники (отрасли и регионы)
@@ -310,11 +317,8 @@ hh-parser reference <тип> [опции]
 **Примеры:**
 
 ```bash
-# Список всех отраслей (постранично)
+# Список всех отраслей
 hh-parser reference industries
-
-# Следующая страница отраслей
-hh-parser reference industries --page 1
 
 # Показать все отрасли без пагинации
 hh-parser reference industries --per-page 0
@@ -325,23 +329,11 @@ hh-parser reference industries --search "информ"
 # Экспорт отраслей в JSON
 hh-parser reference industries --format json > industries.json
 
-# Список регионов России (постранично)
-hh-parser reference areas --country "Россия"
-
-# Следующая страница регионов
-hh-parser reference areas --country "Россия" --page 1
-
-# Показать все регионы без пагинации
-hh-parser reference areas --per-page 0
-
-# Дерево регионов (без пагинации)
+# Дерево регионов
 hh-parser reference areas --format tree
 
 # Поиск региона по названию
 hh-parser reference areas --search "Москва"
-
-# Экспорт регионов в JSON
-hh-parser reference areas --format json > areas.json
 ```
 
 ### Информация о пользователе
@@ -366,13 +358,43 @@ hh-parser whoami
 hh-parser whoami
 # Вывод:
 # Информация о текущем пользователе:
-#  ID: 123456
-#  Имя: Иван Иванов
-#  Email: user@example.com
-#  Телефон: +7 (999) 123-45-67
-#  Является соискателем: True
-#  Является работодателем: False
-#  Является администратором: False
+# ID: 123456
+# Имя: Иван Иванов
+# Email: user@example.com
+# Телефон: +7 (999) 123-45-67
+# Является соискателем: True
+# Является работодателем: False
+```
+
+### Миграция базы данных
+
+```bash
+hh-parser migrate-db [опции]
+```
+
+Управление миграциями базы данных SQLite.
+
+**Опции:**
+
+| Опция         | Описание                          |
+| ------------- | --------------------------------- |
+| `--list`      | Показать список миграций          |
+| `--dry-run`   | Показать изменения без применения |
+| `--apply`     | Автоматическая миграция           |
+| `--apply 123` | Миграция файла 123.sql            |
+| `--status`    | Показать статус БД                |
+
+**Примеры:**
+
+```bash
+# Применить все миграции
+hh-parser migrate-db --apply
+
+# Показать список миграций
+hh-parser migrate-db --list
+
+# Показать изменения без применения
+hh-parser migrate-db --dry-run
 ```
 
 ## Глобальные параметры
@@ -386,7 +408,6 @@ hh-parser whoami
 | `--profile-id <id>`         | Используемый профиль (подкаталог в config-dir). Также можно задать через переменную окружения `HH_PROFILE_ID` |
 | `-d, --api-delay <секунды>` | Задержка между запросами к API HH                                                                             |
 | `--user-agent <строка>`     | User-Agent для запросов                                                                                       |
-| `--proxy-url <url>`         | Прокси для запросов и авторизации                                                                             |
 
 **Примеры:**
 
@@ -399,9 +420,6 @@ hh-parser --profile-id work parse
 
 # Указание директории конфигурации
 hh-parser --config-dir /path/to/config parse
-
-# Использование прокси
-hh-parser --proxy-url http://proxy:8080 parse
 
 # Настройка задержки между запросами
 hh-parser --api-delay 1.5 parse
@@ -452,11 +470,10 @@ hh-parser/
   "token": {
     "access_token": "...",
     "refresh_token": "...",
-    "access_expires_at": "2024-01-01T00:00:00Z"
+    "access_expires_at": 1704067200
   },
   "api_delay": 0.5,
-  "user_agent": "Mozilla/5.0 ...",
-  "proxy_url": "http://proxy:8080"
+  "user_agent": "Mozilla/5.0 ..."
 }
 ```
 
@@ -466,103 +483,103 @@ hh-parser/
 | --------------- | ---------------------------------- |
 | `CONFIG_DIR`    | Путь до директории с конфигурацией |
 | `HH_PROFILE_ID` | ID профиля для использования       |
-| `HTTP_PROXY`    | HTTP прокси                        |
-| `HTTPS_PROXY`   | HTTPS прокси                       |
+
+## Архитектура
+
+Проект построен по модульной архитектуре:
+
+### API модуль ([`src/hh_parser/api/`](src/hh_parser/api/))
+
+- [`ApiClient`](src/hh_parser/api/client.py:201) — клиент для работы с hh.ru API
+- [`OAuthClient`](src/hh_parser/api/client.py:144) — клиент для OAuth авторизации
+- Автоматическое обновление токена доступа
+- Thread-safe запросы с настраиваемой задержкой
+
+### Модуль контактов ([`src/hh_parser/contacts/`](src/hh_parser/contacts/))
+
+- [`ApiContactExtractor`](src/hh_parser/contacts/api_extractor.py:21) — извлечение контактов из API
+- [`SiteContactParser`](src/hh_parser/contacts/site_parser.py) — парсинг сайтов работодателей
+- [`extract_emails()`](src/hh_parser/contacts/extractors.py:87) / [`extract_phones()`](src/hh_parser/contacts/extractors.py) — regex-экстракторы
+- [`deduplicate_contacts()`](src/hh_parser/contacts/deduplication.py:15) — дедупликация с приоритизацией
+
+### Хранилище ([`src/hh_parser/storage/`](src/hh_parser/storage/))
+
+- [`StorageFacade`](src/hh_parser/storage/facade.py:10) — единая точка доступа к данным
+- [`BaseRepository`](src/hh_parser/storage/repositories/base.py:17) — базовый репозиторий с CRUD операциями
+- [`EmployerModel`](src/hh_parser/storage/models/employer.py:8) / [`ContactModel`](src/hh_parser/storage/models/contact.py:9) — модели данных
+- Автоматические миграции схемы БД
+
+### Операции ([`src/hh_parser/operations/`](src/hh_parser/operations/))
+
+Каждая команда CLI реализована как отдельный модуль:
+
+- [`authorize`](src/hh_parser/operations/authorize.py) — авторизация через Playwright
+- [`parse`](src/hh_parser/operations/parse.py) — парсинг работодателей
+- [`parse-contacts`](src/hh_parser/operations/parse_contacts.py) — извлечение контактов
+- [`export`](src/hh_parser/operations/export.py) — экспорт данных
+- [`reference`](src/hh_parser/operations/reference.py) — справочники
+- [`whoami`](src/hh_parser/operations/whoami.py) — информация о пользователе
+- [`migrate-db`](src/hh_parser/operations/migrate_db.py) — миграции БД
 
 ## Структура проекта
 
 ```
 hh-parser/
-├── data/                       # Данные приложения (по умолчанию)
-│   └── default/                # Профиль по умолчанию
-│       ├── config.json         # Конфигурация и токены
-│       ├── cookies.txt         # Cookies сессии
-│       └── hh_parser.db        # База данных SQLite
+├── data/                          # Данные приложения (по умолчанию)
+│   └── default/                   # Профиль по умолчанию
+│       ├── config.json            # Конфигурация и токены
+│       ├── cookies.txt            # Cookies сессии
+│       └── hh_parser.db           # База данных SQLite
 ├── src/hh_parser/
-│   ├── __main__.py             # Точка входа для python -m hh_parser
-│   ├── main.py                 # Основной CLI и класс HHParserTool
-│   ├── api/                    # Клиент для работы с API hh.ru
-│   │ ├── client.py             # API клиент
-│   │ ├── client_keys.py        # Ключи клиента
-│   │ ├── datatypes.py          # Типы данных API
-│   │ ├── errors.py             # Ошибки API
-│   │ └── user_agent.py         # User-Agent
-│   ├── contacts/               # Модуль парсинга контактов
-│   │ ├── __init__.py           # Экспорт модуля
-│   │ ├── extractors.py         # Regex-экстракторы email и телефонов
-│   │ ├── deduplication.py      # Дедупликация контактов
-│   │ ├── api_extractor.py      # Извлечение из hh.ru API
-│   │ └── site_parser.py        # Парсинг сайта работодателя
-│   ├── storage/                # Слой доступа к данным (SQLite)
-│   │ ├── facade.py             # Фасад для работы с хранилищем
-│   │ ├── models/               # Модели данных
-│   │ │ ├── employer.py         # Модель работодателя
-│   │ │ ├── vacancy.py          # Модель вакансии
-│   │ │ └── contact.py          # Модель контакта
-│   │ ├── queries/              # SQL запросы
-│   │ │ ├── schema.sql          # Схема БД
-│   │ │ └── schema_contacts.sql # Схема таблицы контактов
-│   │ └── repositories/         # Репозитории
-│   │       ├── employers.py    # Репозиторий работодателей
-│   │       ├── vacancies.py    # Репозиторий вакансий
-│   │       └── contacts.py     # Репозиторий контактов
-│   ├── operations/             # Операции CLI
-│   │ ├── authorize.py          # Авторизация
-│   │ ├── export.py             # Экспорт данных
-│   │ ├── parse.py              # Парсинг работодателей
-│   │ ├── parse_contacts.py     # Парсинг контактов
-│   │ └── whoami.py             # Информация о пользователе
-│   └── utils/                  # Утилиты
-│       ├── cookiejar.py        # Работа с cookies
-│       ├── date.py             # Работа с датами
-│       ├── json.py             # JSON утилиты
-│       ├── log.py              # Логирование
-│       └── terminal.py         # Настройка терминала
+│   ├── __main__.py                # Точка входа для python -m hh_parser
+│   ├── main.py                    # Основной CLI и класс HHParserTool
+│   ├── api/                       # Клиент для работы с API hh.ru
+│   │   ├── __init__.py
+│   │   ├── client.py              # API клиент (ApiClient, OAuthClient)
+│   │   ├── client_keys.py         # Ключи клиента (Android)
+│   │   ├── datatypes.py           # TypedDict для ответов API
+│   │   ├── errors.py              # Исключения API
+│   │   └── user_agent.py          # Генерация User-Agent
+│   ├── contacts/                  # Модуль парсинга контактов
+│   │   ├── __init__.py
+│   │   ├── api_extractor.py       # Извлечение из hh.ru API
+│   │   ├── site_parser.py         # Парсинг сайта работодателя
+│   │   ├── extractors.py          # Regex-экстракторы email/телефонов
+│   │   └── deduplication.py       # Дедупликация контактов
+│   ├── storage/                   # Слой доступа к данным (SQLite)
+│   │   ├── __init__.py
+│   │   ├── facade.py              # Фасад хранилища
+│   │   ├── utils.py               # Утилиты для миграций
+│   │   ├── models/                # Модели данных
+│   │   │   ├── __init__.py
+│   │   │   ├── base.py            # Базовая модель
+│   │   │   ├── employer.py        # Модель работодателя
+│   │   │   └── contact.py         # Модель контакта
+│   │   ├── queries/               # SQL запросы
+│   │   │   ├── schema.sql         # Схема таблицы employers
+│   │   │   └── schema_contacts.sql# Схема таблицы contacts
+│   │   └── repositories/          # Репозитории
+│   │       ├── __init__.py
+│   │       ├── base.py            # Базовый репозиторий
+│   │       ├── employers.py       # Репозиторий работодателей
+│   │       ├── contacts.py        # Репозиторий контактов
+│   │       └── errors.py          # Ошибки репозиториев
+│   ├── operations/                # Операции CLI
+│   │   ├── authorize.py           # Авторизация
+│   │   ├── export.py              # Экспорт данных
+│   │   ├── parse.py               # Парсинг работодателей
+│   │   ├── parse_contacts.py      # Парсинг контактов
+│   │   ├── reference.py           # Справочники
+│   │   ├── whoami.py              # Информация о пользователе
+│   │   └── migrate_db.py          # Миграции БД
+│   └── utils/                     # Утилиты
+│       ├── __init__.py
+│       ├── cookiejar.py           # Работа с cookies
+│       ├── date.py                # Работа с датами
+│       ├── json.py                # JSON утилиты
+│       ├── log.py                 # Логирование
+│       └── terminal.py            # Настройка терминала
+├── pyproject.toml                 # Конфигурация проекта
+├── requirements.txt               # Зависимости
 └── README.md
 ```
-
-## Устранение неполадок
-
-### Ошибка "Требуется авторизация"
-
-Выполните команду авторизации:
-
-```bash
-hh-parser authorize your_email@example.com
-```
-
-### Ошибка "Требуется ввод капчи"
-
-При авторизации может потребоваться ввод капчи. Используйте флаг `--no-headless` для отображения браузера:
-
-```bash
-hh-parser authorize your_email@example.com --no-headless
-```
-
-### Повреждена база данных
-
-Если база данных повреждена, пересоздайте её:
-
-```bash
-hh-parser migrate-db
-```
-
-### Проблемы с прокси
-
-Убедитесь, что прокси указан правильно:
-
-```bash
-hh-parser --proxy-url http://user:password@proxy:8080 parse
-```
-
-Или через переменные окружения:
-
-```bash
-export HTTP_PROXY=http://proxy:8080
-export HTTPS_PROXY=http://proxy:8080
-hh-parser parse
-```
-
-## Лицензия
-
-MIT
