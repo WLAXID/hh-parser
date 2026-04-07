@@ -45,22 +45,17 @@ class BaseModel:
     def to_db(self) -> dict[str, Any]:
         data = self.to_dict()
         for f in fields(self):
-            # Если какого-то значения нет в словаре, то не ставим его или
-            # ломается установка дефолтных значений.
             value = data.get(f.name, MISSING)
             if value is MISSING:
                 continue
             if f.metadata.get("store_json"):
                 value = json.dumps(value)
-            # Точно не нужно типы приводить перед сохранением
-            # else:
-            #     value = self._coerce_type(value, f)
+
             data[f.name] = value
         return data
 
     @classmethod
     def _coerce_type(cls, value: Any, f: Field) -> Any:
-        # Лишь создатель знает, что с тобой делать
         if get_origin(f.type):
             return value
 
@@ -84,67 +79,52 @@ class BaseModel:
 
     @classmethod
     def _from_mapping(
-        cls,
-        data: Mapping[str, Any],
-        /,
-        from_source: bool = False,
+        cls, data: Mapping[str, Any], /, from_source: bool = False
     ) -> Self:
         kwargs = {}
         for f in fields(cls):
-            if from_source:
-                if f.metadata.get("skip_src") and f.name in data:
+            # Пропускаем поле, если оно помечено как skip_src при импорте из API
+            if from_source and f.metadata.get("skip_src") and f.name in data:
+                continue
+
+            # Получаем значение поля
+            if from_source and (path := f.metadata.get("path")):
+                # Извлечение значения по пути (например, "location.city.name")
+                v = data
+                found = True
+                for key in path.split("."):
+                    if isinstance(v, Mapping):
+                        v = v.get(key)
+                    else:
+                        found = False
+                        break
+                if not found:
                     continue
-                if path := f.metadata.get("path"):
-                    found = True
-                    v = data
-                    for key in path.split("."):
-                        if isinstance(v, Mapping):
-                            v = v.get(key)
-                        else:
-                            found = False
-                            break
-                    if not found:
-                        continue
-                    value = v
-                else:
-                    value = data.get(f.name, MISSING)
-                    if value is MISSING:
-                        continue
-
-                if value is not None and (t := f.metadata.get("transform")):
-                    if isinstance(t, str):
-                        t = getattr(cls, t)
-                    value = t(value)
-
-                value = cls._coerce_type(value, f)
+                value = v
             else:
                 value = data.get(f.name, MISSING)
-                if value is MISSING:
-                    continue
 
-                if f.metadata.get("store_json"):
+            if value is MISSING:
+                continue
+
+            # Применяем трансформацию, если указана
+            if value is not None and (t := f.metadata.get("transform")):
+                if isinstance(t, str):
+                    t = getattr(cls, t)
+                value = t(value)
+
+            # Обрабатываем JSON-поля
+            if f.metadata.get("store_json"):
+                if isinstance(value, str):
                     value = json.loads(value)
-                else:
-                    value = cls._coerce_type(value, f)
+
+            value = cls._coerce_type(value, f)
 
             kwargs[f.name] = value
         return cls(**kwargs)
 
     def to_dict(self) -> dict[str, Any]:
-        return asdict(self)  # pyright: ignore[reportArgumentType]
-
-    # def to_json(self, **kwargs: Any) -> str:
-    #     """Serializes the model to a JSON string."""
-    #     kwargs.setdefault("ensure_ascii", False)
-    #     return json_utils.dumps(self.to_dict(), **kwargs)
-
-    # @classmethod
-    # def from_json(cls, json_str: str, **kwargs: Any) -> Self:
-    #     """Deserializes a model from a JSON string."""
-    #     data = json_utils.loads(json_str, **kwargs)
-    #     # from_api is probably more appropriate as JSON is a common API format
-    #     # and it handles nested data sources.
-    #     return cls.from_api(data)
+        return asdict(self)
 
 
 if __name__ == "__main__":
@@ -171,4 +151,3 @@ if __name__ == "__main__":
     )
 
     print(c)
-    # assert c == CompanyModel(id=42, name="ACME", city_id=1, city="Moscow")

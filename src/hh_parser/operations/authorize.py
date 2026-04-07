@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import argparse
 import asyncio
 import logging
 import typing
@@ -8,12 +7,12 @@ from http.cookiejar import Cookie
 from typing import TYPE_CHECKING
 from urllib.parse import parse_qs, urlsplit
 
+from rich.console import Console
+
 try:
     from playwright.async_api import async_playwright
 except ImportError:
     pass
-
-from ..main import BaseOperation
 
 if TYPE_CHECKING:
     from ..main import HHParserTool
@@ -21,12 +20,11 @@ if TYPE_CHECKING:
 HH_ANDROID_SCHEME = "hhandroid"
 
 logger = logging.getLogger(__name__)
+console = Console()
 
 
-class Operation(BaseOperation):
+class Operation:
     """Авторизация через Playwright"""
-
-    __aliases__: list = ["authenticate", "auth", "login"]
 
     # Селекторы
     SEL_LOGIN_INPUT = 'input[data-qa="login-input-username"]'
@@ -37,8 +35,7 @@ class Operation(BaseOperation):
     SEL_CAPTCHA_IMAGE = 'img[data-qa="account-captcha-picture"]'
     SEL_CAPTCHA_INPUT = 'input[data-qa="account-captcha-input"]'
 
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
+    def __init__(self):
         self._tool: HHParserTool | None = None
         self._args = None
 
@@ -53,19 +50,6 @@ class Operation(BaseOperation):
     @property
     def selector_timeout(self) -> int | None:
         return None if self.is_headless else 5000
-
-    def setup_parser(self, parser: argparse.ArgumentParser) -> None:
-        parser.add_argument("username", nargs="?", help="Email или телефон")
-        parser.add_argument("--password", "-p", help="Пароль для входа")
-        parser.add_argument(
-            "--no-headless",
-            "-n",
-            action="store_true",
-            help="Показать окно браузера",
-        )
-        parser.add_argument(
-            "-m", "--manual", action="store_true", help="Ручной режим ввода"
-        )
 
     def run(self, tool: HHParserTool, args) -> int | None:
         self._tool = tool
@@ -98,7 +82,6 @@ class Operation(BaseOperation):
                 browser = await pw.chromium.launch(headless=self.is_headless)
 
             try:
-                # We don't have specific device emulation in our simplified version
                 context = await browser.new_context()
                 page = await context.new_page()
 
@@ -150,7 +133,7 @@ class Operation(BaseOperation):
                 )
                 api_client.handle_access_token(token)
 
-                print("🔓 Авторизация прошла успешно!")
+                console.print("[green]🔓 Авторизация прошла успешно![/green]")
 
                 if self.is_automated:
                     cookies = await context.cookies()
@@ -179,7 +162,7 @@ class Operation(BaseOperation):
             self.SEL_CODE_CONTAINER, timeout=self.selector_timeout
         )
 
-        print("📨 Код был отправлен. Проверьте почту или SMS.")
+        console.print("[cyan]📨 Код был отправлен. Проверьте почту или SMS.[/cyan]")
         code = (await asyncio.to_thread(input, "📩 Введите полученный код: ")).strip()
         if not code:
             raise RuntimeError("Код подтверждения не может быть пустым.")
@@ -189,21 +172,23 @@ class Operation(BaseOperation):
         logger.debug("Форма с кодом отправлена")
 
     async def _handle_captcha(self, page):
+        from playwright.async_api import TimeoutError as PlaywrightTimeoutError
+
         try:
             await page.wait_for_selector(
                 self.SEL_CAPTCHA_IMAGE,
                 timeout=self.selector_timeout,
                 state="visible",
             )
-        except Exception:
+        except PlaywrightTimeoutError:
             logger.debug("Капчи нет, продолжаем.")
             return
 
         logger.warning(
             "Требуется ввод капчи! Пожалуйста, введите текст с картинки в консоль."
         )
-        print(
-            "\n[!] Требуется ввод капчи. Пожалуйста, решите капчу в браузере и введите текст здесь."
+        console.print(
+            "[yellow]\n[!] Требуется ввод капчи. Пожалуйста, решите капчу в браузере и введите текст здесь.[/yellow]"
         )
         captcha_text = (
             await asyncio.to_thread(input, "Введите текст с картинки: ")

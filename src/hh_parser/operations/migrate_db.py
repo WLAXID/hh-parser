@@ -1,17 +1,16 @@
-"""
-CLI-команда для миграции базы данных.
-"""
+"""Миграция базы данных."""
 
 from __future__ import annotations
 
-import argparse
 import logging
 import re
 import sqlite3
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from hh_parser.main import BaseOperation
+from rich.console import Console
+from rich.table import Table
+
 from hh_parser.storage.utils import (
     MIGRATION_PATH,
     QUERIES_PATH,
@@ -24,6 +23,7 @@ if TYPE_CHECKING:
     from hh_parser.main import HHParserTool
 
 logger = logging.getLogger(__name__)
+console = Console()
 
 
 def remove_sql_comments(sql: str) -> str:
@@ -407,29 +407,8 @@ def auto_migrate(conn: sqlite3.Connection) -> list[str]:
     return applied
 
 
-class Operation(BaseOperation):
+class Operation:
     """Миграция схемы базы данных."""
-
-    __aliases__: list = ["migrate"]
-
-    def setup_parser(self, parser: argparse.ArgumentParser) -> None:
-        parser.add_argument(
-            "--list",
-            action="store_true",
-            help="Показать список доступных миграций",
-        )
-        parser.add_argument(
-            "--apply",
-            nargs="?",
-            const="auto",
-            metavar="NAME",
-            help="Применить миграции. Без аргумента --apply: автоматическая миграция (синхронизация схемы БД с SQL-файлами). С аргументом --apply NAME: применить конкретную миграцию из директории migrations (имя без .sql)",
-        )
-        parser.add_argument(
-            "--status",
-            action="store_true",
-            help="Показать статус базы данных (таблицы, индексы)",
-        )
 
     def run(self, tool: "HHParserTool", args) -> int | None:
         db_path = tool.db_path
@@ -438,17 +417,21 @@ class Operation(BaseOperation):
         if args.list:
             migrations = list_migrations()
             if not migrations:
-                print("Файловые миграции не найдены.")
+                console.print("[yellow]Файловые миграции не найдены.[/yellow]")
                 if MIGRATION_PATH.exists():
-                    print(f"Директория миграций: {MIGRATION_PATH}")
+                    console.print(f"[dim]Директория миграций: {MIGRATION_PATH}[/dim]")
                 else:
-                    print(f"Директория миграций не существует: {MIGRATION_PATH}")
+                    console.print(
+                        f"[dim]Директория миграций не существует: {MIGRATION_PATH}[/dim]"
+                    )
             else:
-                print(f"Доступные миграции ({len(migrations)}):")
+                console.print(f"[bold]Доступные миграции ({len(migrations)}):[/bold]")
                 for m in migrations:
-                    print(f"  - {m}")
-            print()
-            print("Примечание: используйте --apply для автоматической миграции схемы")
+                    console.print(f"  [cyan]•[/cyan] {m}")
+                console.print()
+                console.print(
+                    "[dim]Примечание: используйте --apply для автоматической миграции схемы[/dim]"
+                )
             return 0
 
         # Показать статус базы данных
@@ -465,39 +448,52 @@ class Operation(BaseOperation):
                 return self._apply_file_migration(db_path, args.apply)
 
         # Если нет аргументов — показать справку
-        print(
-            "Используйте --apply для автоматической миграции или --status для проверки."
+        console.print(
+            "[dim]Используйте --apply для автоматической миграции или --status для проверки.[/dim]"
         )
-        print("Примеры:")
-        print(" hh-parser migrate-db --apply # применить автоматические миграции")
-        print(
-            " hh-parser migrate-db --apply 2026-04-04_set_contacts_status_default # применить конкретную миграцию"
+        console.print("[bold]Примеры:[/bold]")
+        console.print(
+            "  [cyan]hh-parser migrate-db --apply[/cyan] # применить автоматические миграции"
         )
-        print(" hh-parser migrate-db --status # показать статус БД")
-        print(" hh-parser migrate-db --list # показать файловые миграции")
+        console.print(
+            "  [cyan]hh-parser migrate-db --apply 2026-04-04_set_contacts_status_default[/cyan] # применить конкретную миграцию"
+        )
+        console.print(
+            "  [cyan]hh-parser migrate-db --status[/cyan] # показать статус БД"
+        )
+        console.print(
+            "  [cyan]hh-parser migrate-db --list[/cyan] # показать файловые миграции"
+        )
         return 0
 
     def _show_status(self, db_path) -> int:
         """Показать статус базы данных."""
-        print(f"База данных: {db_path}")
-        print()
+        console.print(f"[bold]База данных:[/bold] {db_path}")
+        console.print()
 
         if not db_path.exists():
-            print("База данных не существует.")
+            console.print("[red]База данных не существует.[/red]")
             return 1
 
         conn = sqlite3.connect(str(db_path))
         try:
             # Таблицы
-            print("Таблицы:")
             cursor = conn.execute(
                 "SELECT name FROM sqlite_master WHERE type='table' ORDER BY name"
             )
             tables = cursor.fetchall()
+
             for (name,) in tables:
                 cursor = conn.execute(f"SELECT COUNT(*) FROM {name}")
                 count = cursor.fetchone()[0]
-                print(f"  - {name}: {count} записей")
+
+                # Создаём таблицу для каждой таблицы БД
+                table = Table(
+                    title=f"[bold]{name}[/bold] ({count} записей)", show_header=True
+                )
+                table.add_column("Колонка", style="cyan")
+                table.add_column("Тип", style="white")
+                table.add_column("Атрибуты", style="dim")
 
                 # Показываем колонки
                 cursor = conn.execute(f"PRAGMA table_info({name})")
@@ -508,31 +504,38 @@ class Operation(BaseOperation):
                     not_null = "NOT NULL" if col[3] else ""
                     default = f"DEFAULT {col[4]}" if col[4] else ""
                     pk = "PRIMARY KEY" if col[5] else ""
-                    attrs = " ".join(x for x in [col_type, not_null, default, pk] if x)
-                    print(f"      {col_name}: {attrs}")
-            print()
+                    attrs = " ".join(x for x in [not_null, default, pk] if x)
+                    table.add_row(col_name, col_type, attrs)
+
+                console.print(table)
+                console.print()
 
             # Индексы
-            print("Индексы:")
             cursor = conn.execute(
                 "SELECT name, tbl_name FROM sqlite_master WHERE type='index' AND name NOT LIKE 'sqlite_%' ORDER BY name"
             )
             indexes = cursor.fetchall()
-            for name, tbl_name in indexes:
-                print(f"  - {name} (таблица: {tbl_name})")
-            print()
+            if indexes:
+                console.print("[bold]Индексы:[/bold]")
+                for name, tbl_name in indexes:
+                    console.print(
+                        f"  [cyan]•[/cyan] {name} [dim](таблица: {tbl_name})[/dim]"
+                    )
+                console.print()
 
             # Триггеры
-            print("Триггеры:")
             cursor = conn.execute(
                 "SELECT name, tbl_name FROM sqlite_master WHERE type='trigger' ORDER BY name"
             )
             triggers = cursor.fetchall()
+            console.print("[bold]Триггеры:[/bold]")
             if triggers:
                 for name, tbl_name in triggers:
-                    print(f"  - {name} (таблица: {tbl_name})")
+                    console.print(
+                        f"  [cyan]•[/cyan] {name} [dim](таблица: {tbl_name})[/dim]"
+                    )
             else:
-                print("  (нет триггеров)")
+                console.print("  [dim](нет триггеров)[/dim]")
 
         finally:
             conn.close()
@@ -546,7 +549,7 @@ class Operation(BaseOperation):
 
         conn = sqlite3.connect(str(db_path))
         try:
-            print(f"Автоматическая миграция БД: {db_path}")
+            console.print(f"[bold]Автоматическая миграция БД:[/bold] {db_path}")
 
             # Сначала применяем базовую схему
             init_db(conn)
@@ -557,17 +560,19 @@ class Operation(BaseOperation):
             conn.commit()
 
             if applied:
-                print(f"Применено {len(applied)} изменений:")
+                console.print(f"[green]Применено {len(applied)} изменений:[/green]")
                 for change in applied:
-                    print(f"  [OK] {change}")
+                    console.print(f"  [green]✓[/green] {change}")
             else:
-                print("Схема БД актуальна, изменений не требуется.")
+                console.print("[dim]Схема БД актуальна, изменений не требуется.[/dim]")
 
             return 0
 
+        except KeyboardInterrupt:
+            raise
         except Exception as e:
             logger.exception("Ошибка миграции")
-            print(f"Ошибка: {e}")
+            console.print(f"[red]Ошибка: {e}[/red]")
             conn.rollback()
             return 1
         finally:
@@ -577,21 +582,23 @@ class Operation(BaseOperation):
         """Применить конкретную миграцию из файла."""
         migrations = list_migrations()
         if name not in migrations:
-            print(f"Ошибка: миграция '{name}' не найдена.")
-            print(
-                f"Доступные миграции: {', '.join(migrations) if migrations else 'нет'}"
+            console.print(f"[red]Ошибка: миграция '{name}' не найдена.[/red]")
+            console.print(
+                f"[dim]Доступные миграции: {', '.join(migrations) if migrations else 'нет'}[/dim]"
             )
             return 1
 
         conn = sqlite3.connect(str(db_path))
         try:
-            print(f"Применение миграции: {name}")
+            console.print(f"[bold]Применение миграции:[/bold] {name}")
             apply_migration(conn, name)
             conn.commit()
-            print(f"[OK] Миграция {name} применена успешно.")
+            console.print(f"[green]✓ Миграция {name} применена успешно.[/green]")
             return 0
+        except KeyboardInterrupt:
+            raise
         except Exception as e:
-            print(f"[ERROR] Ошибка при применении {name}: {e}")
+            console.print(f"[red]✗ Ошибка при применении {name}: {e}[/red]")
             conn.rollback()
             return 1
         finally:

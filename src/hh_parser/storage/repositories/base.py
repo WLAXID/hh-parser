@@ -52,6 +52,8 @@ class BaseRepository:
     def maybe_commit(self, commit: bool | None = None) -> bool:
         if commit if commit is not None else self.auto_commit:
             self.commit()
+            return True
+        return False
 
     def _row_to_model(self, cursor: sqlite3.Cursor, row: tuple) -> BaseModel:
         data = {col[0]: value for col, value in zip(cursor.description, row)}  # noqa: B905
@@ -128,6 +130,9 @@ class BaseRepository:
         self.maybe_commit(commit=commit)
 
     remove = delete
+
+    # Alias for get() - more intuitive name
+    find_one = get
 
     @wrap_db_errors
     def clear(self, commit: bool | None = None):

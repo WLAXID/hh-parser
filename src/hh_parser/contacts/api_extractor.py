@@ -58,6 +58,8 @@ class ApiContactExtractor:
             )
         except ResourceNotFound:
             logger.debug(f"GET https://api.hh.ru/employers/{employer_id} -> 404")
+        except KeyboardInterrupt:
+            raise
         except Exception as e:
             logger.warning(
                 f"Ошибка получения информации о работодателе {employer_id}: {e}"

@@ -1,5 +1,0 @@
-requests
-urllib3
-playwright
-beautifulsoup4
-lxml

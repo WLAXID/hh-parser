@@ -54,7 +54,8 @@ class ContactsRepository(BaseRepository):
                     employer_name = ?,
                     value = ?,
                     source = ?,
-                    source_url = ?
+                    source_url = ?,
+                    updated_at = CURRENT_TIMESTAMP
                 WHERE contact_type = ? AND normalized_value = ?
                 """,
                 (
@@ -96,6 +97,8 @@ class ContactsRepository(BaseRepository):
             try:
                 self.save(contact)
                 saved += 1
+            except KeyboardInterrupt:
+                raise
             except Exception as e:
                 logger.warning(f"Ошибка сохранения контакта {contact}: {e}")
         return saved

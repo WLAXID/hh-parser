@@ -1,12 +1,10 @@
-"""
-Модуль парсинга контактов работодателей.
+""" Модуль парсинга контактов работодателей. Содержит компоненты для извлечения email и телефонов из: - hh.ru API - Официальных сайтов работодателей """
 
-Содержит компоненты для извлечения email и телефонов из:
-- hh.ru API
-- Официальных сайтов работодателей
-"""
+from hh_parser.cli.config import (
+    DEFAULT_SITE_CONFIG,
+    SiteParserConfig,
+)
 
-from .config import DEFAULT_CONFIG, SiteParserConfig
 from .deduplication import deduplicate_contacts
 from .exceptions import (
     RateLimitExceededError,
@@ -25,7 +23,7 @@ from .site_parser import SiteContactParser
 __all__ = (
     # Конфигурация
     "SiteParserConfig",
-    "DEFAULT_CONFIG",
+    "DEFAULT_SITE_CONFIG",
     # Исключения
     "SiteParserError",
     "SiteNotAccessibleError",

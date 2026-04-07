@@ -4,10 +4,12 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "hh-parser"
+version = "0.1.0"
 description = "Парсер для сбора данных о работодателях и контактах с сайта hh.ru"
 readme = "README.md"
 license = "Apache-2.0"
-requires-python = ">=3.8"
+license-files = ["LICENSE"]
+requires-python = ">=3.12"
 authors = [
     {name = "WLAXID"}
 ]
@@ -15,22 +17,20 @@ keywords = ["hh.ru", "parser", "data extraction", "contacts", "employers", "hr"]
 classifiers = [
     "Development Status :: 3 - Alpha",
     "Intended Audience :: Developers",
-    "License :: OSI Approved :: Apache Software License",
     "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.8",
-    "Programming Language :: Python :: 3.9",
-    "Programming Language :: Python :: 3.10",
-    "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
     "Topic :: Internet :: WWW/HTTP",
     "Topic :: Utilities",
 ]
 dependencies = [
-    "requests",
-    "urllib3",
-    "playwright",
-    "beautifulsoup4",
-    "lxml",
+	"requests",
+	"urllib3",
+	"playwright",
+	"beautifulsoup4",
+	"lxml",
+	"typer",
+	"rich",
+	"questionary",
 ]
 
 [project.urls]
@@ -39,7 +39,7 @@ Repository = "https://github.com/WLAXID/hh-parser"
 Issues = "https://github.com/WLAXID/hh-parser/issues"
 
 [project.scripts]
-hh-parser = "hh_parser.__main__:main"
+hh-parser = "hh_parser.cli.main:app"
 
 [tool.setuptools.packages.find]
 where = ["src"]

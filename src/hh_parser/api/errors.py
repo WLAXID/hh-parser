@@ -11,9 +11,11 @@ __all__ = (
     "ApiError",
     "BadGateway",
     "BadRequest",
+    "CaptchaRequired",
     "ClientError",
     "Forbidden",
     "InternalServerError",
+    "LimitExceeded",
     "Redirect",
     "ResourceNotFound",
 )
@@ -68,9 +70,7 @@ class ApiError(BadResponse):
         return any(v.get("value") == value for v in data.get("errors", []))
 
     @classmethod
-    def raise_for_status(
-        cls: Type[ApiError], response: Response, data: dict
-    ) -> None:
+    def raise_for_status(cls: Type[ApiError], response: Response, data: dict) -> None:
         match response.status_code:
             case status if 300 <= status <= 308:
                 raise Redirect(response, data)

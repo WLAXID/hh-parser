@@ -1,12 +1,10 @@
 from __future__ import annotations
 
-import argparse
 import csv
 import json
 import logging
 from typing import TYPE_CHECKING, Iterator, List
 
-from ..main import BaseOperation
 from ..storage.models.employer import EmployerModel
 
 if TYPE_CHECKING:
@@ -15,40 +13,8 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
-class Operation(BaseOperation):
+class Operation:
     """Экспорт данных о работодателях"""
-
-    __aliases__: list = ["export"]
-
-    def setup_parser(self, parser: argparse.ArgumentParser) -> None:
-        parser.add_argument(
-            "--format",
-            choices=["csv", "json"],
-            default="csv",
-            help="Формат экспорта",
-        )
-        parser.add_argument(
-            "--output",
-            type=str,
-            required=True,
-            help="Путь к выходному файлу",
-        )
-        parser.add_argument(
-            "--industry",
-            type=str,
-            help="Фильтр по отрасли (ID отрасли)",
-        )
-        parser.add_argument(
-            "--area",
-            type=str,
-            help="Фильтр по региону (ID региона)",
-        )
-        parser.add_argument(
-            "--min-vacancies",
-            type=int,
-            default=0,
-            help="Минимальное количество открытых вакансий для фильтрации",
-        )
 
     def run(self, tool: "HHParserTool", args) -> int | None:
         logger.info("Начало экспорта данных о работодателях")
@@ -57,27 +23,19 @@ class Operation(BaseOperation):
         # Формируем фильтры для поиска в БД
         filters = {}
         if args.industry:
-            # В нашей модели industries хранится как JSON строка, поэтому фильтрация по ней сложна.
-            # Для простоты мы будем загружать всех и фильтровать в памяти.
-            # В реальном сценарии лучше было бы хранить отрасли в отдельной таблице.
             filters["industry"] = args.industry
         if args.area:
             filters["area_name"] = args.area
         if args.min_vacancies > 0:
             filters["open_vacancies__gte"] = args.min_vacancies
 
-        # Получаем работодателей из БД с фильтрацией (частичной)
-        # Наши репозитории пока не поддерживают сложные фильтры, поэтому получаем всех и фильтруем в памяти.
         employers: Iterator[EmployerModel] = storage.employers.find()
-        # Преобразуем в список для фильтрации
+
         employers_list = list(employers)
         logger.info(f"Получено {len(employers_list)} работодателей из БД")
 
         # Фильтрация в памяти
         if args.industry:
-            # Фильтрация по отрасли: industries - это JSON строка, например "[7.540, 7.541]"
-            # Мы будем проверять, содержит ли строка нужный ID.
-            # Это не идеально, но для демонстрации сойдет.
             employers_list = [
                 e
                 for e in employers_list

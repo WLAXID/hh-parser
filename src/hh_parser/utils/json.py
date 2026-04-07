@@ -29,11 +29,11 @@ def dumps(obj, *args: Any, **kwargs: Any) -> str:
     return json.dumps(obj, *args, **kwargs)
 
 
-def dump(fp, obj, *args: Any, **kwargs: Any) -> None:
+def dump(obj, fp, *args: Any, **kwargs: Any) -> None:
     """Сериализует объект в файл."""
     kwargs.setdefault("cls", JSONEncoder)
     kwargs.setdefault("ensure_ascii", False)
-    json.dump(fp, obj, *args, **kwargs)
+    json.dump(obj, fp, *args, **kwargs)
 
 
 def loads(s, *args: Any, **kwargs: Any) -> Any:

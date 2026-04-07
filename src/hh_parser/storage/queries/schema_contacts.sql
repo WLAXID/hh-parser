@@ -12,6 +12,7 @@ CREATE TABLE IF NOT EXISTS contacts (
     source_url TEXT,
     normalized_value TEXT NOT NULL,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (employer_id) REFERENCES employers(id) ON DELETE CASCADE
 );
 /* ===================== ИНДЕКСЫ ===================== */
@@ -25,6 +26,6 @@ CREATE TRIGGER IF NOT EXISTS trg_contacts_updated
 AFTER
 UPDATE ON contacts BEGIN
 UPDATE contacts
-SET created_at = CURRENT_TIMESTAMP
+SET updated_at = CURRENT_TIMESTAMP
 WHERE id = OLD.id;
 END;

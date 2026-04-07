@@ -1,17 +1,14 @@
-"""
-CLI-команда для парсинга контактов работодателей.
-"""
+""" CLI-команда для парсинга контактов работодателей. """
 
 from __future__ import annotations
 
-import argparse
 import logging
 from typing import TYPE_CHECKING, Iterator
 
+from hh_parser.cli.config import ParseContactsConfig, SiteParserConfig
 from hh_parser.contacts.api_extractor import ApiContactExtractor
 from hh_parser.contacts.deduplication import deduplicate_contacts
-from hh_parser.contacts.site_parser import SiteContactParser, SiteParserConfig
-from hh_parser.main import BaseOperation
+from hh_parser.contacts.site_parser import SiteContactParser
 from hh_parser.storage.models.contact import ContactModel
 from hh_parser.storage.models.employer import EmployerModel
 
@@ -21,51 +18,24 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
-class Operation(BaseOperation):
+class Operation:
     """Парсинг контактов работодателей."""
-
-    __aliases__: list = ["parse-contacts", "contacts"]
-
-    def setup_parser(self, parser: argparse.ArgumentParser) -> None:
-        parser.add_argument(
-            "--source",
-            choices=["api", "site", "both"],
-            default="both",
-            help="Источник контактов: api (только hh.ru API), site (только сайт), both (оба)",
-        )
-        parser.add_argument(
-            "--employer-id",
-            type=int,
-            nargs="+",
-            help="ID конкретных работодателей для парсинга",
-        )
-        parser.add_argument(
-            "--limit",
-            type=int,
-            default=0,
-            help="Ограничение количества работодателей (0 = без ограничений)",
-        )
-        parser.add_argument(
-            "--site-timeout",
-            type=int,
-            default=30,
-            help="Таймаут для запросов к сайтам работодателей (секунды)",
-        )
-        parser.add_argument(
-            "--max-pages",
-            type=int,
-            default=10,
-            help="Максимум страниц для парсинга на одном сайте",
-        )
-        parser.add_argument(
-            "--delay",
-            type=float,
-            default=2.0,
-            help="Задержка между запросами к одному сайту (секунды)",
-        )
 
     def run(self, tool: "HHParserTool", args) -> int | None:
         logger.info("Начало парсинга контактов работодателей")
+
+        # Загружаем конфигурацию из файла
+        config_data = tool.config.get("parse_contacts", {})
+        file_config = ParseContactsConfig.from_dict(config_data)
+
+        site_config_data = tool.config.get("site_parser", {})
+        file_site_config = SiteParserConfig.from_dict(site_config_data)
+
+        # Определяем итоговые значения: приоритет у аргументов CLI, затем конфиг из файла
+        final_source = getattr(args, "source", None) or file_config.source
+        final_site_timeout = getattr(args, "site_timeout", None) or file_config.site_timeout
+        final_max_pages = getattr(args, "max_pages", None) or file_config.max_pages
+        final_delay = getattr(args, "delay", None) or file_config.delay
 
         # Получаем список работодателей для обработки
         employers = self._get_employers(tool, args)
@@ -90,14 +60,17 @@ class Operation(BaseOperation):
         api_extractor = None
         site_parser = None
 
-        if args.source in ("api", "both"):
+        if final_source in ("api", "both"):
             api_extractor = ApiContactExtractor(tool.api_client)
 
-        if args.source in ("site", "both"):
+        if final_source in ("site", "both"):
             site_config = SiteParserConfig(
-                timeout=args.site_timeout,
-                max_pages_per_site=args.max_pages,
-                delay_between_requests=args.delay,
+                timeout=file_site_config.timeout,
+                connect_timeout=final_site_timeout,
+                max_pages_per_site=final_max_pages,
+                delay_between_requests=final_delay,
+                max_redirects=file_site_config.max_redirects,
+                user_agent=file_site_config.user_agent,
             )
             site_parser = SiteContactParser(site_config)
 
@@ -105,12 +78,11 @@ class Operation(BaseOperation):
         for employer in employers_list:
             try:
                 logger.info(f"{employer.id} {employer.site_url}")
-
                 contacts = self._process_employer(
                     employer=employer,
                     api_extractor=api_extractor,
                     site_parser=site_parser,
-                    source=args.source,
+                    source=final_source,
                 )
 
                 # Дедуплицируем и сохраняем
@@ -128,7 +100,6 @@ class Operation(BaseOperation):
 
                 stats["employers_processed"] += 1
                 stats["contacts_found"] += saved
-
                 emails_count = sum(
                     1 for c in unique_contacts if c.contact_type == "email"
                 )
@@ -142,6 +113,8 @@ class Operation(BaseOperation):
                     f"{employer.id} {employer.site_url} -> email:{emails_count} phone:{phones_count} status:{employer.contacts_status}"
                 )
 
+            except KeyboardInterrupt:
+                raise
             except Exception as e:
                 logger.error(f"Ошибка обработки работодателя {employer.id}: {e}")
                 stats["errors"] += 1
@@ -186,7 +159,6 @@ class Operation(BaseOperation):
         else:
             # Все работодатели с site_url и без статуса контактов
             query = tool.storage.employers.find()
-
             for employer in query:
                 # Пропускаем если уже обработан (не None и не 'not_checked')
                 if (
@@ -198,9 +170,8 @@ class Operation(BaseOperation):
                 if not employer.site_url:
                     continue
                 yield employer
-
-        # Применяем лимит
-        # Note: это делается через генератор, поэтому лимит применяется при итерации
+                # Применяем лимит
+                # Note: это делается через генератор, поэтому лимит применяется при итерации
 
     def _process_employer(
         self,
@@ -230,6 +201,8 @@ class Operation(BaseOperation):
                     employer.id, employer.name
                 ):
                     contacts.append(contact)
+            except KeyboardInterrupt:
+                raise
             except Exception as e:
                 logger.warning(f"Ошибка извлечения из API для {employer.id}: {e}")
 
@@ -240,6 +213,8 @@ class Operation(BaseOperation):
                     employer.id, employer.name, employer.site_url
                 ):
                     contacts.append(contact)
+            except KeyboardInterrupt:
+                raise
             except Exception as e:
                 logger.warning(f"Ошибка парсинга сайта для {employer.id}: {e}")
 

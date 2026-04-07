@@ -7,7 +7,7 @@ import time
 from dataclasses import dataclass
 from functools import cached_property
 from threading import Lock
-from typing import Any, Literal, TypeVar
+from typing import Any, Literal, TypeVar, get_args
 from urllib.parse import urlencode, urljoin
 
 import requests
@@ -50,8 +50,6 @@ class BaseClient:
         self.delay = self.delay or DEFAULT_DELAY
         self.user_agent = self.user_agent or generate_android_useragent()
 
-        # logger.debug(f"user agent: {self.user_agent}")
-
         if not self.session:
             logger.debug("create new session")
             self.session = requests.session()
@@ -73,13 +71,12 @@ class BaseClient:
         as_json: bool = False,
         **kwargs: Any,
     ) -> T:
-        # Не знаю насколько это "правильно"
-        assert method in AllowedMethods.__args__
+        # Проверяем, что метод допустимый
+        assert method in get_args(AllowedMethods)
         params = dict(params or {})
         params.update(kwargs)
         url = self.resolve_url(endpoint)
         with self.lock:
-            # На серваке какая-то анти-DDOS система
             if (
                 delay := (self.delay if delay is None else delay)
                 - time.monotonic()
@@ -89,7 +86,7 @@ class BaseClient:
                 time.sleep(delay)
             has_body = method in ["POST", "PUT"]
             payload = {["data", "json"][as_json] if has_body else "params": params}
-            # logger.debug(f"request info: {method = }, {url = }, {headers = }, params = {repr(params)[:255]}")
+
             response = self.session.request(
                 method,
                 url,
@@ -98,12 +95,6 @@ class BaseClient:
                 allow_redirects=False,
             )
             try:
-                # У этих лошков сервер не отдает Content-Length, а кривое API
-                # отдает пустые ответы, например, при отклике на вакансии,
-                # и мы не можем узнать содержит ли ответ тело
-                # 'Server': 'ddos-guard'
-                # ...
-                # 'Transfer-Encoding': 'chunked'
                 try:
                     rv = response.json() if response.text else {}
                 except json.JSONDecodeError as ex:
@@ -199,7 +190,6 @@ class OAuthClient(BaseClient):
 
 @dataclass
 class ApiClient(BaseClient):
-    # Например, для просмотра информации о компании токен не нужен
     access_token: str | None = None
     refresh_token: str | None = None
     access_expires_at: int = 0
@@ -227,7 +217,7 @@ class ApiClient(BaseClient):
         headers = super()._default_headers()
         if not self.access_token:
             return headers
-        # Это очень интересно, что access token'ы начинаются с USER, т.е. API может содержать какую-то уязвимость, связанную с этим
+
         assert self.access_token.startswith("USER")
         return headers | {"authorization": f"Bearer {self.access_token}"}
 
@@ -248,14 +238,14 @@ class ApiClient(BaseClient):
 
         try:
             return do_request()
-        # TODO: добавить класс для ошибок типа AccessTokenExpired
+
         except errors.Forbidden as ex:
             if not self.is_access_expired or not self.refresh_token:
                 raise ex
             logger.info("try to refresh access_token")
-            # Пробуем обновить токен
+
             self.refresh_access_token()
-            # И повторно отправляем запрос
+
             return do_request()
 
     def handle_access_token(self, token: AccessToken) -> None:

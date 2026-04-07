@@ -1,12 +1,10 @@
 from __future__ import annotations
 
-import argparse
 import logging
 import time
 from typing import TYPE_CHECKING, List, Set
 
 from ..api.client import ApiClient
-from ..main import BaseOperation
 from ..storage.models.employer import EmployerModel
 
 if TYPE_CHECKING:
@@ -15,54 +13,10 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
-class Operation(BaseOperation):
+class Operation:
     """Парсинг работодателей с hh.ru"""
 
-    __aliases__: list = ["parse"]
-
-    def setup_parser(self, parser: argparse.ArgumentParser) -> None:
-        parser.add_argument(
-            "--industry",
-            type=str,
-            nargs="+",
-            help="Фильтр по отрасли (ID отрасли, можно указать несколько)",
-        )
-        parser.add_argument(
-            "--area",
-            type=str,
-            nargs="+",
-            help="Фильтр по региону (ID региона, можно указать несколько)",
-        )
-        parser.add_argument(
-            "--only-with-vacancies",
-            action="store_true",
-            help="Только работодатели с открытыми вакансиями",
-        )
-        parser.add_argument(
-            "--sort-by",
-            choices=["by_name", "by_vacancies_open"],
-            default="by_name",
-            help="Сортировка результатов",
-        )
-        parser.add_argument(
-            "--per-page",
-            type=int,
-            default=100,
-            help="Количество результатов на странице (максимум 100)",
-        )
-        parser.add_argument(
-            "--mode",
-            choices=["fast", "full", "stats-only"],
-            default="fast",
-            help="Режим работы парсера: fast (только базовая информация), full (с расчётом avg_responses), stats-only (обновить статистику для существующих)",
-        )
-        parser.add_argument(
-            "--resume",
-            action="store_true",
-            help="Возобновить парсинг, пропуская уже существующих в БД работодателей",
-        )
-
-    def run(self, tool: "HHParserTool", args) -> int | None:
+    def run(self, tool: "HHParserTool", args, progress_callback=None) -> int | None:
         logger.info("Начало парсинга работодателей")
         api_client: ApiClient = tool.api_client
         storage = tool.storage
@@ -70,9 +24,6 @@ class Operation(BaseOperation):
         if args.mode == "stats-only":
             return self._update_stats_only(storage, api_client)
 
-        # Мы будем собирать уникальные ID работодателей
-        # Для простоты, мы будем сохранять их в множестве в памяти.
-        # В реальном сценарии для большого количества данных лучше использовать временную таблицу.
         employer_ids: Set[int] = set()
 
         # Получаем дерево регионов
@@ -88,8 +39,7 @@ class Operation(BaseOperation):
 
             # Проверяем, нужно ли фильтровать по industry и другим параметрам
             params = {}
-            if args.industry:
-                params["industry"] = ",".join(args.industry)
+
             if args.area:
                 # Если указаны конкретные регионы, то используем только их
                 if area_id not in args.area:
@@ -111,6 +61,8 @@ class Operation(BaseOperation):
                 )
                 try:
                     response = api_client.get("/employers", params=params)
+                except KeyboardInterrupt:
+                    raise
                 except Exception as e:
                     logger.error(f"Ошибка при запросе работодателей: {e}")
                     # В случае ошибки делаем паузу и пробуем снова?
@@ -129,9 +81,8 @@ class Operation(BaseOperation):
                     # API hh.ru не возвращает результаты глубже 5000
                     if found >= 5000:
                         logger.warning(
-                            f"Регион {area_name} содержит >= 5000 работодателей ({found}). "
-                            f"Рекомендуется использовать фильтры (--industry) или "
-                            f"обрабатывать подрегионы для полного охвата."
+                            f"\nРегион {area_name} содержит >= 5000 работодателей ({found}). "
+                            f"Рекомендуется обрабатывать подрегионы для полного охвата.\n"
                         )
 
                 if not items:
@@ -154,11 +105,12 @@ class Operation(BaseOperation):
                             continue
                     if emp_id_int in employer_ids:
                         continue
-                    employer_ids.add(emp_id_int)
 
                     # Получаем полную информацию о работодателе
                     try:
                         emp_details = api_client.get(f"/employers/{emp_id}")
+                    except KeyboardInterrupt:
+                        raise
                     except Exception as e:
                         logger.error(
                             f"Ошибка при получении деталей работодателя {emp_id}: {e}"
@@ -169,11 +121,14 @@ class Operation(BaseOperation):
                     # Извлекаем нужные поля
                     name = emp_details.get("name")
                     site_url = emp_details.get("site_url")
-                    # Нормализуем site_url: пустая строка или только протокол -> None
+                    # Нормализуем site_url
+                    site_url = emp_details.get("site_url")
                     if site_url:
                         site_url = site_url.strip()
                         if not site_url or site_url in ("http://", "https://"):
                             site_url = None
+                    else:
+                        site_url = None
                     alternate_url = emp_details.get("alternate_url")
                     open_vacancies = emp_details.get("open_vacancies", 0)
 
@@ -214,7 +169,22 @@ class Operation(BaseOperation):
                     )
                     try:
                         storage.employers.save(employer)
+                        employer_ids.add(emp_id_int)
                         processed_in_region += 1
+
+                        if progress_callback:
+                            progress_callback(
+                                employer_name=name,
+                                employer_id=emp_id_int,
+                                region=area_name,
+                                has_site=site_url is not None,
+                                total_found=found,
+                                site_url=site_url,
+                                open_vacancies=open_vacancies,
+                                alternate_url=alternate_url,
+                            )
+                    except KeyboardInterrupt:
+                        raise
                     except Exception as e:
                         logger.error(
                             f"Ошибка при сохранении работодателя {emp_id} в БД: {e}"
@@ -230,8 +200,26 @@ class Operation(BaseOperation):
                     if alternate_url:
                         log_parts.append(f"hh: {alternate_url}")
                     logger.info(" | ".join(log_parts))
+
+                    # Проверяем лимит количества работодателей
+                    if (
+                        hasattr(args, "limit")
+                        and args.limit > 0
+                        and len(employer_ids) >= args.limit
+                    ):
+                        logger.info(f"Достигнут лимит работодателей: {args.limit}")
+                        break
+
                 page += 1
                 if page >= pages:
+                    break
+
+                # Проверяем лимит перед следующей страницей
+                if (
+                    hasattr(args, "limit")
+                    and args.limit > 0
+                    and len(employer_ids) >= args.limit
+                ):
                     break
 
                 # Небольшая пауза между страницами (уже есть в API client, но добавим свою)
@@ -250,6 +238,8 @@ class Operation(BaseOperation):
         """Получает дерево регионов и возвращает плоский список всех регионов (включая подрегионы)."""
         try:
             response = api_client.get("/areas")
+        except KeyboardInterrupt:
+            raise
         except Exception as e:
             logger.error(f"Ошибка при получении справочника регионов: {e}")
             return []
@@ -270,8 +260,6 @@ class Operation(BaseOperation):
     ) -> tuple[int, float]:
         """Получает статистику по вакансиям работодателя для расчёта avg_responses.
         Возвращает кортеж (total_responses, avg_responses).
-
-        Согласно PLAN.md: avg_responses = sum(responses) / count(vacancies)
         """
         total_responses = 0
         total_vacancies = 0  # Общее количество вакансий (не только с откликами)
@@ -285,6 +273,8 @@ class Operation(BaseOperation):
             }
             try:
                 response = api_client.get("/vacancies", params=params)
+            except KeyboardInterrupt:
+                raise
             except Exception as e:
                 logger.error(
                     f"Ошибка при получении вакансий для работодателя {employer_id}: {e}"
@@ -341,6 +331,8 @@ class Operation(BaseOperation):
                 logger.debug(
                     f"Обновлён работодатель {employer.id}: total_responses={total_responses}, avg_responses={avg_responses}"
                 )
+            except KeyboardInterrupt:
+                raise
             except Exception as e:
                 logger.error(
                     f"Ошибка при обновлении статистики для работодателя {employer.id}: {e}"

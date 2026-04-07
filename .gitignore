@@ -84,3 +84,6 @@ config.json
 # Plans
 plans/
 
+# Output
+output/*
+!output/.gitkeep

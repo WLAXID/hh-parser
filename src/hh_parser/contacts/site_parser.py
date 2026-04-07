@@ -14,15 +14,15 @@ from __future__ import annotations
 import logging
 import re
 import time
-from typing import Iterator
+from typing import Callable, Iterator
 from urllib.parse import urljoin, urlparse
 
 import requests
 from requests.exceptions import RequestException
 
+from hh_parser.cli.config import DEFAULT_SITE_CONFIG, SiteParserConfig
 from hh_parser.storage.models.contact import ContactModel
 
-from .config import DEFAULT_CONFIG, SiteParserConfig
 from .exceptions import RateLimitExceededError, SiteNotAccessibleError
 from .extractors import extract_emails, extract_phones, normalize_email, normalize_phone
 from .keywords import CONTACT_KEYWORDS
@@ -33,14 +33,20 @@ logger = logging.getLogger(__name__)
 class SiteContactParser:
     """Парсинг контактов с сайта работодателя."""
 
-    def __init__(self, config: SiteParserConfig | None = None):
+    def __init__(
+        self,
+        config: SiteParserConfig | None = None,
+        on_url_change: Callable[[str], None] | None = None,
+    ):
         """
         Инициализировать парсер.
 
         Args:
             config: Конфигурация парсера
+            on_url_change: Callback-функция, вызываемая при переходе на новый URL
         """
-        self.config = config or DEFAULT_CONFIG
+        self.config = config or DEFAULT_SITE_CONFIG
+        self.on_url_change = on_url_change
         self._logged_contacts: set[tuple[str, str]] = (
             set()
         )  # (contact_type, normalized_value)
@@ -93,11 +99,17 @@ class SiteContactParser:
                     main_content=main_page_content,
                 )
             else:
-                logger.warning(f"Не удалось получить главную страницу: {site_url}")
-        except SiteNotAccessibleError as e:
-            logger.warning(f"Сайт недоступен {site_url}: {e}")
+                raise SiteNotAccessibleError(
+                    f"Не удалось получить главную страницу: {site_url}"
+                )
+        except KeyboardInterrupt:
+            raise
+        except SiteNotAccessibleError:
+            raise
         except Exception as e:
-            logger.error(f"Ошибка парсинга сайта {site_url}: {type(e).__name__}: {e}")
+            raise SiteNotAccessibleError(
+                f"Ошибка парсинга сайта: {type(e).__name__}: {e}"
+            ) from e
 
     def _normalize_url(self, url: str) -> str:
         """
@@ -130,6 +142,10 @@ class SiteContactParser:
         Returns:
             Содержимое страницы или None
         """
+        # Вызываем callback перед запросом
+        if self.on_url_change:
+            self.on_url_change(url)
+
         try:
             logger.debug(f"GET {url}")
             response = self.session.get(
@@ -149,6 +165,8 @@ class SiteContactParser:
             else:
                 return None
 
+        except KeyboardInterrupt:
+            raise
         except RequestException as e:
             logger.debug(f"Ошибка запроса {url}: {type(e).__name__}: {e}")
             return None
@@ -245,17 +263,25 @@ class SiteContactParser:
 
             # Задержка между запросами
             if pages_visited > 0:
-                time.sleep(self.config.delay_between_requests)
+                try:
+                    time.sleep(self.config.delay_between_requests)
+                except KeyboardInterrupt:
+                    logger.info("Парсинг прерван пользователем во время задержки")
+                    raise
 
-            content = self._fetch_page(contact_url)
-            if content:
-                pages_visited += 1
-                yield from self._extract_contacts_from_page(
-                    employer_id=employer_id,
-                    employer_name=employer_name,
-                    content=content,
-                    url=contact_url,
-                )
+            try:
+                content = self._fetch_page(contact_url)
+                if content:
+                    pages_visited += 1
+                    yield from self._extract_contacts_from_page(
+                        employer_id=employer_id,
+                        employer_name=employer_name,
+                        content=content,
+                        url=contact_url,
+                    )
+            except KeyboardInterrupt:
+                logger.info("Парсинг прерван пользователем")
+                raise
 
     def _find_contact_links(self, base_url: str, content: str) -> list[str]:
         """

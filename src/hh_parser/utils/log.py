@@ -36,22 +36,16 @@ class ColorHandler(logging.StreamHandler):
     }
 
     def format(self, record: logging.LogRecord) -> str:
-        # Подавляем вывод подробного сообщения об ошибке
         orig_exc_info = record.exc_info
 
-        # Детали ошибки показываем только при отладке
         if self.level > logging.DEBUG:
             record.exc_info = None
 
         message = super().format(record)
-        # Обязательно нужно восстановить оригинальное значение или в файловом
-        # логе не будет деталей ошибки
+
         record.exc_info = orig_exc_info
-        # isatty = getattr(self.stream, "isatty", None)
-        # if isatty and isatty():
         color_code = self._color_map[record.levelname]
         return f"\033[{color_code}m{message}\033[0m"
-        # return message
 
 
 class RedactingFilter(logging.Filter):
@@ -62,9 +56,7 @@ class RedactingFilter(logging.Filter):
         placeholder: str | Callable = lambda m: "*" * len(m.group(0)),
     ):
         super().__init__()
-        self.pattern = (
-            re.compile(f"({'|'.join(patterns)})") if patterns else None
-        )
+        self.pattern = re.compile(f"({'|'.join(patterns)})") if patterns else None
         self.placeholder = placeholder
 
     def filter(self, record: logging.LogRecord) -> bool:
@@ -81,20 +73,16 @@ def setup_logger(
     verbosity_level: int,
     log_file: PathLike,
 ) -> None:
-    # В лог-файл пишем все!
+
     logger.setLevel(logging.DEBUG)
     color_handler = ColorHandler()
-    # [C] Critical Error Occurred
-    color_handler.setFormatter(
-        logging.Formatter("[%(levelname).1s] %(message)s")
-    )
+
+    color_handler.setFormatter(logging.Formatter("[%(levelname).1s] %(message)s"))
     color_handler.setLevel(verbosity_level)
 
-    # Логи
     file_handler = RotatingFileHandler(
         log_file,
         maxBytes=MAX_LOG_SIZE,
-        # Без ротации файл будет бесконечно расти, а размер не будет ограничваться
         backupCount=1,
         encoding="utf-8",
     )
