@@ -7,7 +7,7 @@ from __future__ import annotations
 import logging
 from typing import TYPE_CHECKING, Iterator
 
-from hh_parser.cli.config import ParseContactsConfig, SiteParserConfig
+from hh_parser.cli.config import ParseContactsConfig
 from hh_parser.parsers.deduplication import deduplicate_contacts
 from hh_parser.parsers.employer_sites.site_parser import SiteContactParser
 from hh_parser.parsers.hh_api.api_extractor import ApiContactExtractor
@@ -30,16 +30,8 @@ class Operation:
         config_data = tool.config.get("parse_contacts", {})
         file_config = ParseContactsConfig.from_dict(config_data)
 
-        site_config_data = tool.config.get("site_parser", {})
-        file_site_config = SiteParserConfig.from_dict(site_config_data)
-
         # Определяем итоговые значения: приоритет у аргументов CLI, затем конфиг из файла
         final_source = getattr(args, "source", None) or file_config.source
-        final_site_timeout = (
-            getattr(args, "site_timeout", None) or file_config.site_timeout
-        )
-        final_max_pages = getattr(args, "max_pages", None) or file_config.max_pages
-        final_delay = getattr(args, "delay", None) or file_config.delay
 
         # Получаем список работодателей для обработки
         employers = self._get_employers(tool, args)
@@ -68,15 +60,7 @@ class Operation:
             api_extractor = ApiContactExtractor(tool.api_client)
 
         if final_source in ("site", "both"):
-            site_config = SiteParserConfig(
-                timeout=file_site_config.timeout,
-                connect_timeout=final_site_timeout,
-                max_pages_per_site=final_max_pages,
-                delay_between_requests=final_delay,
-                max_redirects=file_site_config.max_redirects,
-                user_agent=file_site_config.user_agent,
-            )
-            site_parser = SiteContactParser(site_config)
+            site_parser = SiteContactParser(file_config)
 
         # Обрабатываем каждого работодателя
         for employer in employers_list:

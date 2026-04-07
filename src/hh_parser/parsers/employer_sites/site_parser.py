@@ -20,7 +20,7 @@ from urllib.parse import urljoin, urlparse
 import requests
 from requests.exceptions import RequestException
 
-from hh_parser.cli.config import DEFAULT_SITE_CONFIG, SiteParserConfig
+from hh_parser.cli.config import ParseContactsConfig
 from hh_parser.storage.models.contact import ContactModel
 
 from ..exceptions import RateLimitExceededError, SiteNotAccessibleError
@@ -40,7 +40,7 @@ class SiteContactParser:
 
     def __init__(
         self,
-        config: SiteParserConfig | None = None,
+        config: ParseContactsConfig | None = None,
         on_url_change: Callable[[str], None] | None = None,
     ):
         """
@@ -50,7 +50,7 @@ class SiteContactParser:
             config: Конфигурация парсера
             on_url_change: Callback-функция, вызываемая при переходе на новый URL
         """
-        self.config = config or DEFAULT_SITE_CONFIG
+        self.config = config or ParseContactsConfig()
         self.on_url_change = on_url_change
         self._logged_contacts: set[tuple[str, str]] = (
             set()

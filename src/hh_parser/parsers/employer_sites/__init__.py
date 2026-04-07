@@ -5,15 +5,11 @@
 с официальных сайтов работодателей.
 """
 
-from hh_parser.cli.config import (
-    DEFAULT_SITE_CONFIG,
-    SiteParserConfig,
-)
+from hh_parser.cli.config import ParseContactsConfig
 
 from .site_parser import SiteContactParser
 
 __all__ = (
     "SiteContactParser",
-    "SiteParserConfig",
-    "DEFAULT_SITE_CONFIG",
+    "ParseContactsConfig",
 )

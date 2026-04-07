@@ -18,10 +18,7 @@ from rich.progress import (
 )
 from rich.table import Table
 
-from ..config import (
-    ParseContactsConfig,
-    SiteParserConfig,
-)
+from ..config import ParseContactsConfig
 from ..utils import format_number, get_tool, print_error, print_success
 
 if TYPE_CHECKING:
@@ -75,16 +72,8 @@ def parse_contacts(
     config_data = tool.config.get("parse_contacts", {})
     file_config = ParseContactsConfig.from_dict(config_data)
 
-    site_config_data = tool.config.get("site_parser", {})
-    file_site_config = SiteParserConfig.from_dict(site_config_data)
-
     # Определяем итоговые значения: приоритет у аргументов CLI, затем конфиг из файла
     final_source = source if source is not None else file_config.source
-    final_site_timeout = (
-        site_timeout if site_timeout is not None else file_config.site_timeout
-    )
-    final_max_pages = max_pages if max_pages is not None else file_config.max_pages
-    final_delay = delay if delay is not None else file_config.delay
 
     # Валидация source
     if final_source not in ("api", "site", "both"):
@@ -111,9 +100,9 @@ def parse_contacts(
         )
     if limit > 0:
         params_table.add_row("Лимит:", str(limit))
-    params_table.add_row("Таймаут сайта:", f"{final_site_timeout} сек")
-    params_table.add_row("Макс. страниц:", str(final_max_pages))
-    params_table.add_row("Задержка:", f"{final_delay} сек")
+    params_table.add_row("Таймаут сайта:", f"{file_config.timeout} сек")
+    params_table.add_row("Макс. страниц:", str(file_config.max_pages_per_site))
+    params_table.add_row("Задержка:", f"{file_config.delay_between_requests} сек")
     console.print(params_table)
     console.print()
 
@@ -179,17 +168,7 @@ def parse_contacts(
             api_extractor = ApiContactExtractor(tool.api_client)
 
         if final_source in ("site", "both"):
-            # Используем конфигурацию из файла с переопределением из аргументов
-            # final_site_timeout используется как timeout на чтение (read timeout)
-            site_config = SiteParserConfig(
-                timeout=final_site_timeout,
-                connect_timeout=file_site_config.connect_timeout,
-                max_pages_per_site=final_max_pages,
-                delay_between_requests=final_delay,
-                max_redirects=file_site_config.max_redirects,
-                user_agent=file_site_config.user_agent,
-            )
-            site_parser = SiteContactParser(site_config, on_url_change=on_url_change)
+            site_parser = SiteContactParser(file_config, on_url_change=on_url_change)
 
         # Статистика
         stats = {

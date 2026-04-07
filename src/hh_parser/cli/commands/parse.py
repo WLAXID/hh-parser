@@ -31,25 +31,44 @@ console = Console()
 def parse(
     ctx: typer.Context,
     area: Optional[List[str]] = typer.Option(
-        None, "--area", "-a", help="Фильтр по региону (ID региона, можно указать несколько)",
+        None,
+        "--area",
+        "-a",
+        help="Фильтр по региону (ID региона, можно указать несколько)",
     ),
     only_with_vacancies: bool = typer.Option(
-        False, "--only-with-vacancies", help="Только работодатели с открытыми вакансиями",
+        False,
+        "--only-with-vacancies",
+        help="Только работодатели с открытыми вакансиями",
     ),
     sort_by: str = typer.Option(
-        None, "--sort-by", "-s", help="Сортировка результатов",
+        None,
+        "--sort-by",
+        "-s",
+        help="Сортировка результатов",
     ),
     per_page: int = typer.Option(
-        None, "--per-page", help="Количество результатов на странице (максимум 100)",
+        None,
+        "--per-page",
+        help="Количество результатов на странице (максимум 100)",
     ),
     mode: str = typer.Option(
-        None, "--mode", "-m", help="Режим работы: fast (базовая информация), full (с расчётом avg_responses), stats-only (обновить статистику)",
+        None,
+        "--mode",
+        "-m",
+        help="Режим работы: fast (базовая информация), full (с расчётом avg_responses), stats-only (обновить статистику)",
     ),
     resume: bool = typer.Option(
-        False, "--resume", "-r", help="Возобновить парсинг, пропуская уже существующих работодателей",
+        False,
+        "--resume",
+        "-r",
+        help="Возобновить парсинг, пропуская уже существующих работодателей",
     ),
     limit: int = typer.Option(
-        0, "--limit", "-l", help="Ограничение количества работодателей (0 = без ограничений)",
+        0,
+        "--limit",
+        "-l",
+        help="Ограничение количества работодателей (0 = без ограничений)",
     ),
 ) -> None:
     """Парсинг работодателей с hh.ru API."""
@@ -176,18 +195,34 @@ def parse(
                 last_table.add_column(
                     "Вакансий", style="dim", justify="center", width=8
                 )
+                # Добавляем столбец "ср. откликов" только в режиме full
+                if final_mode == "full":
+                    last_table.add_column(
+                        "Ср. откликов", style="dim", justify="center", width=12
+                    )
                 last_table.add_column("hh.ru", style="white", justify="left", width=40)
                 last_table.add_column("Сайт", style="white", justify="left", width=40)
 
                 for emp in progress_holder["last_employers"]:
-                    last_table.add_row(
+                    row_data = [
                         str(emp["id"]),
                         emp["name"][:35] if emp["name"] else "-",
                         emp["region"][:18] if emp["region"] else "-",
                         str(emp["vacancies"]),
-                        emp["hh_url"][:40] if emp["hh_url"] else "-",
-                        emp["site"][:40] if emp["site"] else "-",
+                    ]
+                    # Добавляем avg_responses только в режиме full
+                    if final_mode == "full":
+                        avg_resp = emp.get("avg_responses")
+                        row_data.append(
+                            f"{avg_resp:.1f}" if avg_resp is not None else "-"
+                        )
+                    row_data.extend(
+                        [
+                            emp["hh_url"][:40] if emp["hh_url"] else "-",
+                            emp["site"][:40] if emp["site"] else "-",
+                        ]
                     )
+                    last_table.add_row(*row_data)
                 layout_table.add_row(last_table)
 
             # Прогресс-бар
@@ -205,6 +240,7 @@ def parse(
             site_url: str | None = None,
             open_vacancies: int = 0,
             alternate_url: str | None = None,
+            avg_responses: float | None = None,
         ):
             """Обновляет отображение текущего работодателя."""
             progress_holder["count"] += 1
@@ -221,6 +257,7 @@ def parse(
                 "vacancies": open_vacancies,
                 "site": site_url or "-",
                 "hh_url": alternate_url or "-",
+                "avg_responses": avg_responses,
             }
             progress_holder["last_employers"].append(employer_info)
             # Оставляем только последние 5
@@ -279,7 +316,9 @@ def parse(
                 stats_table = Table(title="Статистика базы данных", show_header=False)
                 stats_table.add_column("Параметр", style="cyan")
                 stats_table.add_column("Значение", style="green", justify="right")
-                stats_table.add_row("Всего работодателей:", format_number(employers_count))
+                stats_table.add_row(
+                    "Всего работодателей:", format_number(employers_count)
+                )
                 console.print()
                 console.print(stats_table)
             else:

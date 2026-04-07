@@ -182,6 +182,9 @@ class Operation:
                                 site_url=site_url,
                                 open_vacancies=open_vacancies,
                                 alternate_url=alternate_url,
+                                avg_responses=avg_responses
+                                if args.mode == "full"
+                                else None,
                             )
                     except KeyboardInterrupt:
                         raise
@@ -258,9 +261,7 @@ class Operation:
     def _get_vacancies_stats(
         self, api_client: ApiClient, employer_id: int
     ) -> tuple[int, float]:
-        """Получает статистику по вакансиям работодателя для расчёта avg_responses.
-        Возвращает кортеж (total_responses, avg_responses).
-        """
+        """Получает статистику по вакансиям работодателя для расчёта avg_responses."""
         total_responses = 0
         total_vacancies = 0  # Общее количество вакансий (не только с откликами)
         page = 0

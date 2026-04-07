@@ -91,7 +91,7 @@ class Operation:
                 )
                 await page.goto(
                     api_client.oauth_client.authorize_url,
-                    timeout=30000,
+                    timeout=None,
                     wait_until="load",
                 )
 
