@@ -112,11 +112,7 @@ def authorize(
     )
 
     try:
-        from hh_parser.operations.authorize import (
-            BrowserClosedError,
-            OAuthTimeoutError,
-            Operation,
-        )
+        from hh_parser.operations.authorize import Operation
     except ImportError as exc:
         print_error(f"Не удалось загрузить команду авторизации: {exc}")
         raise typer.Exit(code=1) from exc
@@ -140,19 +136,13 @@ def authorize(
             task = progress.add_task("Ожидание авторизации...", total=None)  # noqa: F841
             operation.run(tool, args)
 
-        tool.save_token()
+            tool.save_token()
 
-        console.print()
-        print_success("Авторизация прошла успешно!")
-        console.print(f"[dim]Профиль: {tool.config_path}[/dim]")
-        console.print("[dim]Токен сохранён[/dim]")
+            console.print()
+            print_success("\nАвторизация прошла успешно!")
+            console.print(f"[dim]Профиль: {tool.config_path}[/dim]")
+            console.print("[dim]Токен сохранён[/dim]")
 
-    except BrowserClosedError as exc:
-        print_error(str(exc))
-        raise typer.Exit(code=1) from exc
-    except OAuthTimeoutError as exc:
-        print_error(str(exc))
-        raise typer.Exit(code=1) from exc
     except RuntimeError as exc:
         msg = str(exc).strip()
         if "Playwright" in msg or "playwright" in msg:

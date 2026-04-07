@@ -1,99 +1,117 @@
+"""
+Операции экспорта данных.
+"""
+
 from __future__ import annotations
 
 import csv
 import json
 import logging
-from typing import TYPE_CHECKING, Iterator, List
-
-from ..storage.models.employer import EmployerModel
+from pathlib import Path
+from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from ..main import HHParserTool
+    from hh_parser.main import HHParserTool
+    from hh_parser.storage.models.contact import ContactModel
+    from hh_parser.storage.models.employer import EmployerModel
 
 logger = logging.getLogger(__name__)
 
 
-class Operation:
-    """Экспорт данных о работодателях"""
+class ExportEmployersOperation:
+    """Экспорт работодателей в CSV или JSON."""
 
-    def run(self, tool: "HHParserTool", args) -> int | None:
-        logger.info("Начало экспорта данных о работодателях")
-        storage = tool.storage
+    def __init__(self, tool: "HHParserTool"):
+        self.tool = tool
+        self.storage = tool.storage
 
-        # Формируем фильтры для поиска в БД
-        filters = {}
-        if args.industry:
-            filters["industry"] = args.industry
-        if args.area:
-            filters["area_name"] = args.area
-        if args.min_vacancies > 0:
-            filters["open_vacancies__gte"] = args.min_vacancies
+    def run(
+        self,
+        format: str,
+        output: Path,
+        area: str | None = None,
+        min_vacancies: int = 0,
+    ) -> dict:
+        """
+        Выполнить экспорт работодателей.
 
-        employers: Iterator[EmployerModel] = storage.employers.find()
+        Args:
+            format: Формат экспорта (csv/json)
+            output: Путь к выходному файлу
+            area: Фильтр по региону
+            min_vacancies: Минимальное количество вакансий
 
-        employers_list = list(employers)
-        logger.info(f"Получено {len(employers_list)} работодателей из БД")
+        Returns:
+            Словарь со статистикой экспорта
+        """
+        # Получаем работодателей из БД
+        employers_list = list(self.storage.employers.find())
 
-        # Фильтрация в памяти
-        if args.industry:
+        # Применяем фильтры
+        if area:
             employers_list = [
                 e
                 for e in employers_list
-                if e.industries and args.industry in e.industries
+                if e.area_name and area.lower() in e.area_name.lower()
             ]
-        if args.area:
+
+        if min_vacancies > 0:
             employers_list = [
-                e
-                for e in employers_list
-                if e.area_name and args.area.lower() in e.area_name.lower()
-            ]
-        if args.min_vacancies > 0:
-            employers_list = [
-                e for e in employers_list if e.open_vacancies >= args.min_vacancies
+                e for e in employers_list if e.open_vacancies >= min_vacancies
             ]
 
-        logger.info(f"После фильтрации осталось {len(employers_list)} работодателей")
+        if not employers_list:
+            return {"count": 0, "size": 0}
 
-        # Экспорт в выбранном формате
-        if args.format == "csv":
-            self._export_csv(employers_list, args.output)
-        elif args.format == "json":
-            self._export_json(employers_list, args.output)
+        # Экспорт
+        if format == "csv":
+            self._export_csv(employers_list, output)
+        else:
+            self._export_json(employers_list, output)
 
-        logger.info(f"Экспорт завершен. Данные сохранены в {args.output}")
-        return 0
+        return {
+            "count": len(employers_list),
+            "size": output.stat().st_size,
+        }
 
-    def _export_csv(self, employers: List[EmployerModel], output_path: str) -> None:
-        with open(output_path, "w", newline="", encoding="utf-8") as csvfile:
-            fieldnames = [
-                "id",
-                "name",
-                "site_url",
-                "alternate_url",
-                "open_vacancies",
-                "total_responses",
-                "avg_responses",
-                "industries",
-                "area_name",
-            ]
-            writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
-            writer.writeheader()
+    def _export_csv(self, employers: list["EmployerModel"], output: Path) -> None:
+        """Экспорт в CSV формат."""
+        with open(output, "w", newline="", encoding="utf-8") as f:
+            writer = csv.writer(f)
+            # Заголовки
+            writer.writerow(
+                [
+                    "id",
+                    "name",
+                    "site_url",
+                    "alternate_url",
+                    "open_vacancies",
+                    "industries",
+                    "area_name",
+                    "avg_responses",
+                    "created_at",
+                    "updated_at",
+                ]
+            )
+            # Данные
             for emp in employers:
                 writer.writerow(
-                    {
-                        "id": emp.id,
-                        "name": emp.name,
-                        "site_url": emp.site_url or "",
-                        "alternate_url": emp.alternate_url or "",
-                        "open_vacancies": emp.open_vacancies,
-                        "total_responses": emp.total_responses,
-                        "avg_responses": emp.avg_responses,
-                        "industries": emp.industries or "",
-                        "area_name": emp.area_name or "",
-                    }
+                    [
+                        emp.id,
+                        emp.name,
+                        emp.site_url or "",
+                        emp.alternate_url or "",
+                        emp.open_vacancies,
+                        emp.industries or "",
+                        emp.area_name or "",
+                        emp.avg_responses or "",
+                        emp.created_at or "",
+                        emp.updated_at or "",
+                    ]
                 )
 
-    def _export_json(self, employers: List[EmployerModel], output_path: str) -> None:
+    def _export_json(self, employers: list["EmployerModel"], output: Path) -> None:
+        """Экспорт в JSON формат."""
         data = []
         for emp in employers:
             data.append(
@@ -103,11 +121,119 @@ class Operation:
                     "site_url": emp.site_url,
                     "alternate_url": emp.alternate_url,
                     "open_vacancies": emp.open_vacancies,
-                    "total_responses": emp.total_responses,
-                    "avg_responses": emp.avg_responses,
                     "industries": emp.industries,
                     "area_name": emp.area_name,
+                    "avg_responses": emp.avg_responses,
+                    "created_at": str(emp.created_at) if emp.created_at else None,
+                    "updated_at": str(emp.updated_at) if emp.updated_at else None,
                 }
             )
-        with open(output_path, "w", encoding="utf-8") as jsonfile:
-            json.dump(data, jsonfile, indent=2, ensure_ascii=False)
+
+        with open(output, "w", encoding="utf-8") as f:
+            json.dump(data, f, indent=2, ensure_ascii=False)
+
+
+class ExportContactsOperation:
+    """Экспорт контактов в CSV или JSON."""
+
+    def __init__(self, tool: "HHParserTool"):
+        self.tool = tool
+        self.storage = tool.storage
+
+    def run(
+        self,
+        format: str,
+        output: Path,
+        employer_id: int | None = None,
+    ) -> dict:
+        """
+        Выполнить экспорт контактов.
+
+        Args:
+            format: Формат экспорта (csv/json)
+            output: Путь к выходному файлу
+            employer_id: Фильтр по ID работодателя
+
+        Returns:
+            Словарь со статистикой экспорта
+        """
+        # Получаем контакты
+        contacts_list = list(self.storage.contacts.find())
+
+        if employer_id:
+            contacts_list = [c for c in contacts_list if c.employer_id == employer_id]
+
+        if not contacts_list:
+            return {"count": 0, "size": 0}
+
+        # Экспорт
+        if format == "csv":
+            self._export_csv(contacts_list, output)
+        else:
+            self._export_json(contacts_list, output)
+
+        return {
+            "count": len(contacts_list),
+            "size": output.stat().st_size,
+        }
+
+    def _export_csv(self, contacts: list["ContactModel"], output: Path) -> None:
+        """Экспорт в CSV формат."""
+        with open(output, "w", newline="", encoding="utf-8") as f:
+            writer = csv.writer(f)
+            writer.writerow(
+                [
+                    "id",
+                    "employer_id",
+                    "employer_name",
+                    "contact_type",
+                    "value",
+                    "normalized_value",
+                    "source",
+                    "created_at",
+                ]
+            )
+            for contact in contacts:
+                employer = self.storage.employers.get(contact.employer_id)
+                employer_name = employer.name if employer else ""
+                writer.writerow(
+                    [
+                        contact.id,
+                        contact.employer_id,
+                        employer_name,
+                        contact.contact_type or "",
+                        contact.value or "",
+                        contact.normalized_value or "",
+                        contact.source or "",
+                        str(contact.created_at) if contact.created_at else "",
+                    ]
+                )
+
+    def _export_json(self, contacts: list["ContactModel"], output: Path) -> None:
+        """Экспорт в JSON формат."""
+        data = []
+        for contact in contacts:
+            employer = self.storage.employers.get(contact.employer_id)
+            data.append(
+                {
+                    "id": contact.id,
+                    "employer_id": contact.employer_id,
+                    "employer_name": employer.name if employer else None,
+                    "contact_type": contact.contact_type,
+                    "value": contact.value,
+                    "normalized_value": contact.normalized_value,
+                    "source": contact.source,
+                    "created_at": str(contact.created_at)
+                    if contact.created_at
+                    else None,
+                }
+            )
+
+        with open(output, "w", encoding="utf-8") as f:
+            json.dump(data, f, indent=2, ensure_ascii=False)
+
+
+__all__ = (
+    "ExportEmployersOperation",
+    "ExportContactsOperation",
+)

@@ -116,14 +116,10 @@ class ParseEmployersConfig:
 
 # Конфигурации по умолчанию
 DEFAULT_SITE_CONFIG = SiteParserConfig()
-DEFAULT_PARSE_CONTACTS_CONFIG = ParseContactsConfig()
-DEFAULT_PARSE_EMPLOYERS_CONFIG = ParseEmployersConfig()
 
 __all__ = (
     "SiteParserConfig",
     "ParseContactsConfig",
     "ParseEmployersConfig",
     "DEFAULT_SITE_CONFIG",
-    "DEFAULT_PARSE_CONTACTS_CONFIG",
-    "DEFAULT_PARSE_EMPLOYERS_CONFIG",
 )

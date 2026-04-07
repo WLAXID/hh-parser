@@ -23,9 +23,14 @@ from requests.exceptions import RequestException
 from hh_parser.cli.config import DEFAULT_SITE_CONFIG, SiteParserConfig
 from hh_parser.storage.models.contact import ContactModel
 
-from .exceptions import RateLimitExceededError, SiteNotAccessibleError
-from .extractors import extract_emails, extract_phones, normalize_email, normalize_phone
-from .keywords import CONTACT_KEYWORDS
+from ..exceptions import RateLimitExceededError, SiteNotAccessibleError
+from ..extractors import (
+    extract_emails,
+    extract_phones,
+    normalize_email,
+    normalize_phone,
+)
+from ..keywords import CONTACT_KEYWORDS
 
 logger = logging.getLogger(__name__)
 
@@ -221,7 +226,11 @@ class SiteContactParser:
                 )
 
     def _find_contact_pages(
-        self, employer_id: int, employer_name: str, base_url: str, main_content: str
+        self,
+        employer_id: int,
+        employer_name: str,
+        base_url: str,
+        main_content: str,
     ) -> Iterator[ContactModel]:
         """
         Найти и парсить страницы контактов.
@@ -287,8 +296,8 @@ class SiteContactParser:
         """
         Найти ссылки на страницы контактов по ключевым словам в anchor text.
 
-        Ищем все <a> теги, извлекаем текст ссылки (anchor text) и проверяем
-        наличие ключевых слов.
+        Ищем все <a> теги, извлекаем текст ссылки (anchor text)
+        и проверяем наличие ключевых слов.
 
         Args:
             base_url: Базовый URL сайта

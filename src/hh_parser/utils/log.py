@@ -1,12 +1,9 @@
 import enum
 import logging
 import re
-from collections import deque
-from datetime import datetime
-from enum import auto
 from logging.handlers import RotatingFileHandler
 from os import PathLike
-from typing import Callable, TextIO
+from typing import Callable
 
 # 10MB
 MAX_LOG_SIZE = 10 << 20
@@ -14,13 +11,13 @@ MAX_LOG_SIZE = 10 << 20
 
 class Color(enum.Enum):
     BLACK = 30
-    RED = auto()
-    GREEN = auto()
-    YELLOW = auto()
-    BLUE = auto()
-    PURPLE = auto()
-    CYAN = auto()
-    WHITE = auto()
+    RED = enum.auto()
+    GREEN = enum.auto()
+    YELLOW = enum.auto()
+    BLUE = enum.auto()
+    PURPLE = enum.auto()
+    CYAN = enum.auto()
+    WHITE = enum.auto()
 
     def __str__(self) -> str:
         return str(self.value)
@@ -102,35 +99,3 @@ def setup_logger(
 
     for h in [color_handler, file_handler]:
         logger.addHandler(h)
-
-
-TS_RE = re.compile(r"^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}")
-
-
-def collect_traceback_logs(
-    fp: TextIO,
-    after_dt: datetime,
-    maxlines: int = 1000,
-) -> str:
-    error_lines = deque(maxlen=maxlines)
-    prev_line = ""
-    log_dt = None
-    collecting_traceback = False
-    for line in fp:
-        if ts_match := TS_RE.match(line):
-            log_dt = datetime.strptime(ts_match.group(0), "%Y-%m-%d %H:%M:%S")
-            collecting_traceback = False
-
-        if (
-            line.startswith("Traceback (most recent call last):")
-            and log_dt
-            and log_dt >= after_dt
-        ):
-            error_lines.append(prev_line)
-            collecting_traceback = True
-
-        if collecting_traceback:
-            error_lines.append(line)
-
-        prev_line = line
-    return "".join(error_lines)

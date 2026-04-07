@@ -65,21 +65,9 @@ class Operation:
         args = self._args
         api_client = self._tool.api_client
 
-        if self.is_automated:
-            username = (
-                args.username
-                or (await asyncio.to_thread(input, "👤 Введите email или телефон: "))
-            ).strip()
-            if not username:
-                raise RuntimeError("Empty username")
-            logger.debug(f"authenticate with: {username}")
-
-            if self.is_headless:
-                logger.debug("Headless режим активен")
-
-            async with async_playwright() as pw:
-                logger.debug("Запуск браузера...")
-                browser = await pw.chromium.launch(headless=self.is_headless)
+        async with async_playwright() as pw:
+            logger.debug("Запуск браузера...")
+            browser = await pw.chromium.launch(headless=self.is_headless)
 
             try:
                 context = await browser.new_context()
@@ -108,11 +96,21 @@ class Operation:
                 )
 
                 if self.is_automated:
+                    username = (
+                        args.username
+                        or (
+                            await asyncio.to_thread(
+                                input, "👤 Введите email или телефон: "
+                            )
+                        )
+                    ).strip()
+                    if not username:
+                        raise RuntimeError("Empty username")
+
                     await page.wait_for_selector(
                         self.SEL_LOGIN_INPUT, timeout=self.selector_timeout
                     )
                     await page.fill(self.SEL_LOGIN_INPUT, username)
-                    logger.debug("Логин введен")
 
                     password = args.password
                     if password:
@@ -120,27 +118,22 @@ class Operation:
                     else:
                         await self._onetime_code_login(page)
 
-                logger.debug("Ожидание OAuth-кода...")
                 auth_code = await asyncio.wait_for(
                     code_future, timeout=[None, 60.0][self.is_automated]
                 )
 
                 page.remove_listener("request", handle_request)
 
-                logger.debug("Код получен, пробуем получить токен...")
                 token = await asyncio.to_thread(
                     api_client.oauth_client.authenticate, auth_code
                 )
                 api_client.handle_access_token(token)
-
-                console.print("[green]🔓 Авторизация прошла успешно![/green]")
 
                 if self.is_automated:
                     cookies = await context.cookies()
                     self._set_session_cookies(cookies)
 
             finally:
-                logger.debug("Закрытие браузера")
                 await browser.close()
 
     async def _direct_login(self, page, password: str) -> None:

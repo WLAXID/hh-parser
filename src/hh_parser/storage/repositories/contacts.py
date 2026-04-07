@@ -24,12 +24,6 @@ class ContactsRepository(BaseRepository):
         """Найти все контакты работодателя."""
         return self.find(employer_id=employer_id)
 
-    def find_by_employer_and_type(
-        self, employer_id: int, contact_type: str
-    ) -> Iterator[ContactModel]:
-        """Найти контакты работодателя определённого типа."""
-        return self.find(employer_id=employer_id, contact_type=contact_type)
-
     def exists(self, contact_type: str, normalized_value: str) -> bool:
         """Проверить существование контакта (глобально по всем работодателям)."""
         cursor = self.conn.execute(
@@ -117,39 +111,3 @@ class ContactsRepository(BaseRepository):
             "SELECT COUNT(*) FROM contacts WHERE employer_id = ?", (employer_id,)
         )
         return cursor.fetchone()[0]
-
-    def get_employers_with_contacts(self) -> list[int]:
-        """Получить список ID работодателей, у которых есть контакты."""
-        cursor = self.conn.execute("SELECT DISTINCT employer_id FROM contacts")
-        return [row[0] for row in cursor.fetchall()]
-
-    def get_employers_without_contacts(self, limit: int = 0) -> list[int]:
-        """Получить список ID работодателей без контактов."""
-        query = """
-            SELECT e.id FROM employers e
-            WHERE e.site_url IS NOT NULL AND e.site_url != ''
-            AND NOT EXISTS (SELECT 1 FROM contacts c WHERE c.employer_id = e.id)
-        """
-        if limit > 0:
-            query += f" LIMIT {limit}"
-
-        cursor = self.conn.execute(query)
-        return [row[0] for row in cursor.fetchall()]
-
-    def get_last_processed_employer_id(self) -> int | None:
-        """
-        Получить ID последнего работодателя, для которого были сохранены контакты.
-        Используется для возобновления парсинга с последнего места.
-
-        Returns:
-            ID последнего обработанного работодателя или None, если контактов нет
-        """
-        cursor = self.conn.execute(
-            """
-            SELECT employer_id FROM contacts
-            ORDER BY created_at DESC, id DESC
-            LIMIT 1
-            """
-        )
-        row = cursor.fetchone()
-        return row[0] if row else None

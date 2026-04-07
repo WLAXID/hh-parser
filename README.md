@@ -73,7 +73,7 @@
 ### Отказ от ответственности
 
 - 📋 Данные предоставляются **"как есть"** — автор не гарантирует точность, актуальность или полноту
-- 🔧 Инструмент предоставляется **как есть** — без гарантий пригодности для конкретных целей
+- 🔧 Инструмент предоставляется **"как есть"** — без гарантий пригодности для конкретных целей
 - ⚖️ Автор **не несёт ответственности** за неправомерное использование инструмента
 - 👤 Пользователь несёт **полную ответственность** за законность своих действий
 - 🚫 Пользователь принимает **риск блокировки** — сервисы могут ограничить доступ при обнаружении автоматической активности
@@ -90,7 +90,7 @@
 
 ```bash
 # Клонировать репозиторий
-git clone <repository-url>
+git clone https://github.com/WLAXID/hh-parser
 cd hh-parser
 
 # Создать виртуальное окружение
@@ -645,85 +645,90 @@ hh-parser/
 
 ```
 hh-parser/
-├── data/                              # Данные приложения (по умолчанию)
-│   └── default/                       # Профиль по умолчанию
-│       ├── config.json                # Конфигурация и токены
-│       ├── cookies.txt                # Cookies сессии
-│       └── hh_parser.db               # База данных SQLite
+├── data/                               # Данные приложения (по умолчанию)
+│   └── default/                        # Профиль по умолчанию
+│       ├── config.json                 # Конфигурация и токены
+│       ├── cookies.txt                 # Cookies сессии
+│       └── hh_parser.db                # База данных SQLite
 │
 ├── src/hh_parser/
-│   ├── __main__.py                    # Точка входа для python -m hh_parser
-│   ├── main.py                        # Основной CLI и класс HHParserTool
+│   ├── __main__.py                     # Точка входа для python -m hh_parser
+│   ├── main.py                         # Основной CLI и класс HHParserTool
 │   │
-│   ├── api/                           # Клиент для работы с API hh.ru
+│   ├── api/                            # Клиент для работы с API hh.ru
 │   │   ├── __init__.py
-│   │   ├── client.py                  # API клиент (ApiClient, OAuthClient)
-│   │   ├── client_keys.py             # Ключи клиента (Android)
-│   │   ├── datatypes.py               # TypedDict для ответов API
-│   │   ├── errors.py                  # Исключения API
-│   │   └── user_agent.py              # Генерация User-Agent
+│   │   ├── client.py                   # API клиент (ApiClient, OAuthClient)
+│   │   ├── client_keys.py              # Ключи клиента (Android)
+│   │   ├── datatypes.py                # TypedDict для ответов API
+│   │   ├── errors.py                   # Исключения API
+│   │   └── user_agent.py               # Генерация User-Agent
 │   │
-│   ├── cli/                           # CLI интерфейс (Typer)
+│   ├── cli/                            # CLI интерфейс (Typer)
 │   │   ├── __init__.py
-│   │   ├── main.py                    # Главный модуль CLI
-│   │   ├── config.py                  # Классы конфигурации команд
-│   │   ├── utils.py                   # Утилиты CLI
-│   │   └── commands/                  # Команды CLI
+│   │   ├── main.py                     # Главный модуль CLI
+│   │   ├── config.py                   # Классы конфигурации команд
+│   │   ├── utils.py                    # Утилиты CLI
+│   │   └── commands/                   # Команды CLI
 │   │       ├── __init__.py
-│   │       ├── authorize.py           # Авторизация
-│   │       ├── export.py              # Экспорт данных
-│   │       ├── parse.py               # Парсинг работодателей
-│   │       ├── parse_contacts.py      # Парсинг контактов
-│   │       ├── reference.py           # Справочники
-│   │       ├── whoami.py              # Информация о пользователе
-│   │       └── migrate_db.py          # Миграции БД
+│   │       ├── authorize.py            # Авторизация
+│   │       ├── export.py               # Экспорт данных
+│   │       ├── parse.py                # Парсинг работодателей
+│   │       ├── parse_contacts.py       # Парсинг контактов
+│   │       ├── reference.py            # Справочники
+│   │       ├── whoami.py               # Информация о пользователе
+│   │       └── migrate_db.py           # Миграции БД
 │   │
-│   ├── contacts/                      # Модуль парсинга контактов
-│   │   ├── __init__.py
-│   │   ├── api_extractor.py           # Извлечение из hh.ru API
-│   │   ├── site_parser.py             # Парсинг сайта работодателя
-│   │   ├── keywords.py                # Ключевые слова для поиска страниц
-│   │   ├── extractors.py              # Regex-экстракторы email/телефонов
-│   │   ├── exceptions.py              # Исключения модуля
-│   │   └── deduplication.py           # Дедупликация контактов
-│   │
-│   ├── storage/                       # Слой доступа к данным (SQLite)
-│   │   ├── __init__.py
-│   │   ├── facade.py                  # Фасад хранилища
-│   │   ├── utils.py                   # Утилиты для миграций
-│   │   ├── models/                    # Модели данных
+│   ├── parsers/                        # Модули парсинга данных
+│   │   ├── __init__.py                 # Экспорты общих функций
+│   │   ├── extractors.py               # Regex-экстракторы email/телефонов
+│   │   ├── deduplication.py            # Дедупликация контактов
+│   │   ├── keywords.py                 # Ключевые слова для поиска страниц
+│   │   ├── exceptions.py               # Исключения парсеров
+│   │   │
+│   │   ├── hh_api/                     # Парсинг hh.ru API
 │   │   │   ├── __init__.py
-│   │   │   ├── base.py                # Базовая модель
-│   │   │   ├── employer.py            # Модель работодателя
-│   │   │   └── contact.py             # Модель контакта
-│   │   ├── queries/                   # SQL запросы
-│   │   │   ├── schema.sql             # Схема таблицы employers
-│   │   │   └── schema_contacts.sql    # Схема таблицы contacts
-│   │   └── repositories/              # Репозитории
+│   │   │   └── api_extractor.py        # Извлечение контактов из API
+│   │   │
+│   │   └── employer_sites/             # Парсинг сайтов работодателей
 │   │       ├── __init__.py
-│   │       ├── base.py                # Базовый репозиторий
-│   │       ├── employers.py           # Репозиторий работодателей
-│   │       ├── contacts.py            # Репозиторий контактов
-│   │       └── errors.py              # Ошибки репозиториев
+│   │       └── site_parser.py          # Парсинг сайта работодателя
 │   │
-│   ├── operations/                    # Операции CLI
-│   │   ├── authorize.py               # Авторизация
-│   │   ├── export.py                  # Экспорт данных
-│   │   ├── parse.py                   # Парсинг работодателей
-│   │   ├── parse_contacts.py          # Парсинг контактов
-│   │   ├── reference.py               # Справочники
-│   │   ├── whoami.py                  # Информация о пользователе
-│   │   └── migrate_db.py              # Миграции БД
+│   ├── storage/                        # Слой доступа к данным (SQLite)
+│   │   ├── __init__.py
+│   │   ├── facade.py                   # Фасад хранилища
+│   │   ├── utils.py                    # Утилиты для миграций
+│   │   ├── models/                     # Модели данных
+│   │   │   ├── __init__.py
+│   │   │   ├── base.py                 # Базовая модель
+│   │   │   ├── employer.py             # Модель работодателя
+│   │   │   └── contact.py              # Модель контакта
+│   │   ├── queries/                    # SQL запросы
+│   │   │   ├── schema.sql              # Схема таблицы employers
+│   │   │   └── schema_contacts.sql     # Схема таблицы contacts
+│   │   └── repositories/               # Репозитории
+│   │       ├── __init__.py
+│   │       ├── base.py                 # Базовый репозиторий
+│   │       ├── employers.py            # Репозиторий работодателей
+│   │       ├── contacts.py             # Репозиторий контактов
+│   │       └── errors.py               # Ошибки репозиториев
 │   │
-│   └── utils/                         # Утилиты
+│   ├── operations/                     # Бизнес-логика операций
+│   │   ├── __init__.py                 # Экспорт всех операций
+│   │   ├── authorize.py                # Авторизация
+│   │   ├── export.py                   # Экспорт данных
+│   │   ├── parse.py                    # Парсинг работодателей
+│   │   ├── parse_contacts.py           # Парсинг контактов
+│   │   └── migrate_db.py               # Миграции БД
+│   │
+│   └── utils/                          # Утилиты
 │       ├── __init__.py
-│       ├── cookiejar.py               # Работа с cookies
-│       ├── date.py                    # Работа с датами
-│       ├── json.py                    # JSON утилиты
-│       ├── log.py                     # Логирование
-│       └── terminal.py                # Настройка терминала
+│       ├── cookiejar.py                # Работа с cookies
+│       ├── date.py                     # Работа с датами
+│       ├── json.py                     # JSON утилиты
+│       ├── log.py                      # Логирование
+│       └── terminal.py                 # Настройка терминала
 │
-├── pyproject.toml                     # Конфигурация проекта
+├── pyproject.toml                      # Конфигурация проекта
 └── README.md
 ```
 

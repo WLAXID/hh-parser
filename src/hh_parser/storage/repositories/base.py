@@ -129,17 +129,8 @@ class BaseRepository:
         self.conn.execute(sql, (pk_value,))
         self.maybe_commit(commit=commit)
 
-    remove = delete
-
     # Alias for get() - more intuitive name
     find_one = get
-
-    @wrap_db_errors
-    def clear(self, commit: bool | None = None):
-        self.conn.execute(f"DELETE FROM {self.table_name};")
-        self.maybe_commit(commit)
-
-    clean = clear
 
     def _insert(
         self,
@@ -213,18 +204,3 @@ class BaseRepository:
             obj = self.model.from_api(obj)
         data = obj.to_db()
         self._insert(data, **kwargs)
-
-    @wrap_db_errors
-    def save_batch(
-        self,
-        items: list[BaseModel | Mapping[str, Any]],
-        /,
-        **kwargs: Any,
-    ) -> None:
-        if not items:
-            return
-        data = [
-            (self.model.from_api(i) if isinstance(i, Mapping) else i).to_db()
-            for i in items
-        ]
-        self._insert(data, batch=True, **kwargs)

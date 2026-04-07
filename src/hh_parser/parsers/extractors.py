@@ -47,7 +47,6 @@ EMAIL_EXCLUDE_PATTERNS = [
     re.compile(r"@localhost"),  # локальные адреса
 ]
 
-
 # ============================================================================
 # Паттерны для телефонов
 # ============================================================================
@@ -234,3 +233,11 @@ def _deobfuscate_email(obfuscated: str) -> str | None:
         return text
 
     return None
+
+
+__all__ = (
+    "extract_emails",
+    "extract_phones",
+    "normalize_email",
+    "normalize_phone",
+)

@@ -119,9 +119,9 @@ def parse_contacts(
 
     try:
         # Импортируем необходимые модули
-        from hh_parser.contacts.api_extractor import ApiContactExtractor
-        from hh_parser.contacts.deduplication import deduplicate_contacts
-        from hh_parser.contacts.site_parser import SiteContactParser
+        from hh_parser.parsers.deduplication import deduplicate_contacts
+        from hh_parser.parsers.employer_sites.site_parser import SiteContactParser
+        from hh_parser.parsers.hh_api.api_extractor import ApiContactExtractor
 
         # Получаем список работодателей
         if employer_id:
@@ -307,8 +307,10 @@ def parse_contacts(
                         # API контакты
                         if api_extractor:
                             try:
-                                api_contacts = api_extractor.extract(employer.id)
-                                contacts.extend(api_contacts)
+                                for contact in api_extractor.extract_from_employer(
+                                    employer.id, employer.name
+                                ):
+                                    contacts.append(contact)
                             except KeyboardInterrupt:
                                 raise
                             except Exception as e:

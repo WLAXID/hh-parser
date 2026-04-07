@@ -10,7 +10,12 @@ from typing import TYPE_CHECKING, Iterator
 from hh_parser.api.errors import ResourceNotFound
 from hh_parser.storage.models.contact import ContactModel
 
-from .extractors import extract_emails, extract_phones, normalize_email, normalize_phone
+from ..extractors import (
+    extract_emails,
+    extract_phones,
+    normalize_email,
+    normalize_phone,
+)
 
 if TYPE_CHECKING:
     from hh_parser.api.client import ApiClient
@@ -51,8 +56,10 @@ class ApiContactExtractor:
         try:
             logger.debug(f"GET https://api.hh.ru/employers/{employer_id}")
             employer_info = self.api_client.request("GET", f"employers/{employer_id}")
+
             # Получаем название работодателя из ответа API
             actual_name = employer_info.get("name", employer_name)
+
             yield from self._extract_from_employer_info(
                 employer_id, actual_name, employer_info
             )
@@ -102,7 +109,11 @@ class ApiContactExtractor:
             )
 
     def _extract_from_text(
-        self, employer_id: int, employer_name: str, text: str, source_url: str
+        self,
+        employer_id: int,
+        employer_name: str,
+        text: str,
+        source_url: str,
     ) -> Iterator[ContactModel]:
         """
         Извлечь контакты из произвольного текста.
@@ -139,3 +150,6 @@ class ApiContactExtractor:
                 source_url=source_url,
                 normalized_value=normalize_phone(phone),
             )
+
+
+__all__ = ("ApiContactExtractor",)

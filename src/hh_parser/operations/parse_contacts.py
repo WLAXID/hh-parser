@@ -1,4 +1,6 @@
-""" CLI-команда для парсинга контактов работодателей. """
+"""
+CLI-команда для парсинга контактов работодателей.
+"""
 
 from __future__ import annotations
 
@@ -6,9 +8,9 @@ import logging
 from typing import TYPE_CHECKING, Iterator
 
 from hh_parser.cli.config import ParseContactsConfig, SiteParserConfig
-from hh_parser.contacts.api_extractor import ApiContactExtractor
-from hh_parser.contacts.deduplication import deduplicate_contacts
-from hh_parser.contacts.site_parser import SiteContactParser
+from hh_parser.parsers.deduplication import deduplicate_contacts
+from hh_parser.parsers.employer_sites.site_parser import SiteContactParser
+from hh_parser.parsers.hh_api.api_extractor import ApiContactExtractor
 from hh_parser.storage.models.contact import ContactModel
 from hh_parser.storage.models.employer import EmployerModel
 
@@ -33,7 +35,9 @@ class Operation:
 
         # Определяем итоговые значения: приоритет у аргументов CLI, затем конфиг из файла
         final_source = getattr(args, "source", None) or file_config.source
-        final_site_timeout = getattr(args, "site_timeout", None) or file_config.site_timeout
+        final_site_timeout = (
+            getattr(args, "site_timeout", None) or file_config.site_timeout
+        )
         final_max_pages = getattr(args, "max_pages", None) or file_config.max_pages
         final_delay = getattr(args, "delay", None) or file_config.delay
 
@@ -96,10 +100,12 @@ class Operation:
                 else:
                     # Контакты найдены
                     employer.contacts_status = "has_contacts"
+
                 tool.storage.employers.save(employer)
 
                 stats["employers_processed"] += 1
                 stats["contacts_found"] += saved
+
                 emails_count = sum(
                     1 for c in unique_contacts if c.contact_type == "email"
                 )
@@ -166,12 +172,15 @@ class Operation:
                     and employer.contacts_status != "not_checked"
                 ):
                     continue
+
                 # Пропускаем если нет site_url
                 if not employer.site_url:
                     continue
+
                 yield employer
-                # Применяем лимит
-                # Note: это делается через генератор, поэтому лимит применяется при итерации
+
+        # Применяем лимит
+        # Note: это делается через генератор, поэтому лимит применяется при итерации
 
     def _process_employer(
         self,
